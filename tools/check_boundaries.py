@@ -179,7 +179,7 @@ def main(argv: list[str]) -> int:
             violations.extend(scan_file(target, target.parent.name))
 
     if violations:
-        print("❌ 越界檢查沒過：\n")
+        print("[X] 越界檢查沒過：\n")
         for v in violations:
             print(f"   {v}")
         print(
@@ -188,7 +188,7 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    print(f"✅ 越界檢查通過（掃了 {len(targets)} 個模組）")
+    print(f"[OK] 越界檢查通過（掃了 {len(targets)} 個模組）")
     return 0
 
 

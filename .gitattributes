@@ -1,0 +1,32 @@
+# 行尾規則。沒有這份檔案的話會發生什麼：
+#
+#   Windows 端的 git 預設 core.autocrlf=true，checkout 會把整個工作目錄轉成
+#   CRLF；macOS 端是 LF。而 pre-commit 有 end-of-file-fixer、trailing-whitespace
+#   與 ruff-format，於是同一批檔案會被兩邊來回改，diff 變成整檔變動，
+#   合併時人人有份。把規則寫進 repo 才是一次解決五個人，不是每台各自設。
+#
+# 五個人裡四個用 Windows，所以這份檔案的重要性比一般專案高。
+* text=auto eol=lf
+
+# Windows 專用的腳本要 CRLF：Windows PowerShell 5.1 對 LF 的 .ps1 不一定友善，
+# cmd 讀 .bat 更是直接出事。
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二進位：任何行尾轉換都會把檔案弄壞
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.pdf  binary
+*.parquet binary
+*.npz  binary
+*.gguf binary
+*.onnx binary
+*.db   binary
+*.sqlite3 binary
+
+# lock 檔由 uv 產生，不要在 diff 裡展開（review 時看它沒有意義）
+uv.lock linguist-generated=true -diff
