@@ -22,7 +22,10 @@ repos:
       # 規矩一與規矩二的執法者：模組資料夾不准自己呼叫模型、連網，或 import 別人的模組
       - id: boundary-check
         name: 模組越界檢查
-        entry: python tools/check_boundaries.py
+        # 走 uv run，不要用系統的 python：Windows 上系統的 python 可能是 3.13
+        # （專案要 >=3.11,<3.12），macOS 上常常根本沒有 python、只有 python3。
+        # 原本那樣寫，兩邊都是碰運氣。
+        entry: uv run python tools/check_boundaries.py
         language: system
         pass_filenames: false
         always_run: true

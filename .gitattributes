@@ -1,12 +1,15 @@
-# 換行符一律 LF（說明書 §1.3 / S2 的跨平台補充）
+# 行尾規則。沒有這份檔案會發生什麼：
 #
-# Windows 的 git 預設 core.autocrlf=true，checkout 時會把 LF 轉成 CRLF。後果：
-#   1. Makefile 變成 CRLF → make 直接爆「missing separator」
-#   2. pre-commit 的 end-of-file-fixer 跟 Windows 的自動轉換互相打架，永遠改不完
-#   3. 每個檔案顯示為「整份修改過」的假 diff，把真正的改動淹掉
+#   Windows 端的 git 預設 core.autocrlf=true，checkout 會把整個工作目錄轉成
+#   CRLF；macOS 端是 LF。後果有三個：
+#     1. Makefile 變成 CRLF → make 直接爆「missing separator」
+#     2. pre-commit 的 end-of-file-fixer、trailing-whitespace 與 ruff-format
+#        跟 Windows 的自動轉換互相打架，同一批檔案兩邊來回改、永遠改不完
+#     3. 每個檔案顯示成「整份修改過」的假 diff，把真正的改動淹掉
 #
-# 這個檔案把全 repo 釘死在 LF，五台電腦 clone 下來拿到的位元組完全一樣，
-# 而且優先權高於每個人本機的 core.autocrlf 設定 —— 不需要人人記得去設。
+#   五個人裡四個用 Windows，所以這份檔案的重要性比一般專案高。規則寫進 repo
+#   才是一次解決五個人，而且優先權高於各自本機的 core.autocrlf —— 不需要人人
+#   記得去設。
 
 * text=auto eol=lf
 
@@ -23,14 +26,27 @@ Makefile         text eol=lf
 .gitattributes   text eol=lf
 .python-version  text eol=lf
 
-# 二進位檔不要被當成文字處理（會被改壞）
+# 反過來，Windows 專用的腳本要 CRLF：PowerShell 5.1 對 LF 的 .ps1 不一定友善，
+# cmd 讀 LF 的 .bat 更是直接出事。
+*.ps1            text eol=crlf
+*.bat            text eol=crlf
+*.cmd            text eol=crlf
+
+# 二進位檔不要被當成文字處理：任何行尾轉換都會把檔案弄壞
 *.png            binary
 *.jpg            binary
 *.jpeg           binary
 *.gif            binary
+*.webp           binary
 *.pdf            binary
 *.parquet        binary
+*.npz            binary
 *.gguf           binary
 *.bin            binary
 *.onnx           binary
 *.safetensors    binary
+*.db             binary
+*.sqlite3        binary
+
+# lock 檔由 uv 產生，不要在 diff 裡展開（review 時看它沒有意義）
+uv.lock          linguist-generated=true -diff

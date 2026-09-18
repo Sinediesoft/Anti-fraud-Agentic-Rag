@@ -13,9 +13,18 @@ from contracts import AnalyzeInput
 from . import guards
 from .registry import MODULES_ROOT, load
 
-OK = "✅"
-NO = "❌"
-WARN = "⚠️ "
+# 這三個標記刻意只用 ASCII。
+#
+#   注意 原本是三個 emoji（打勾、打叉、警告）。Windows 的 locale 是 cp950，而 Python 在
+#     stdout 被接成管道或導向檔案時用的是 locale 編碼、不是主控台的 UTF-8
+#     ——那三個字元 cp950 編不出來，整支程式當場 UnicodeEncodeError。
+#     pre-commit 正是這樣抓 hook 輸出的，所以 Windows 端會變成「commit 不了」。
+#     macOS 的 locale 是 UTF-8，所以那邊永遠看不到這個問題。
+#
+#   畫面上的 emoji 沒有動（app/ui.py）——Streamlit 是畫到瀏覽器，不走 stdout。
+OK = "[OK]"
+NO = "[X]"
+WARN = "[!] "
 
 
 def _load_one(module_id: str):
@@ -72,7 +81,7 @@ def cmd_selfcheck(module_id: str) -> int:
         )
         total = len(questions)
         results.append(
-            (total >= 20 and hits >= 17, f"3. 20 題考題中 {hits}/{total} 題認得出來（要 ≥ 17/20）")
+            (total >= 20 and hits >= 17, f"3. 20 題考題中 {hits}/{total} 題認得出來（要 >= 17/20）")
         )
     else:
         results.append((False, "3. 還沒有 eval/route_questions.yaml（S12 第 4 點要出 20 題）"))

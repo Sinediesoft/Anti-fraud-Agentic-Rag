@@ -1,0 +1,50 @@
+# requirements.txt —— 給「不裝 uv」的人用的備援清單。
+#
+# ⚠ 這個專案的權威是 pyproject.toml ＋ uv.lock，正規裝法是：
+#
+#       uv sync --extra dev --extra ui
+#
+#   這份檔案是手寫的鏡像，只列**直接相依**（不含傳遞相依），版本對齊 uv.lock
+#   當下解出來的那一組。所以它保證得了「裝起來能跑」，保證不了「五台機器完全
+#   一樣」——那件事只有 uv.lock 做得到。
+#
+#   uv.lock 改過之後這裡要跟著改，或直接重生一份完整的（含傳遞相依）：
+#
+#       uv export --no-hashes --extra dev --extra ui -o requirements.txt
+#
+# 用法（Windows）：Python 要 3.11.x，不是 3.12 也不是 3.13
+#
+#       py -3.11 -m venv .venv
+#       .venv\Scripts\activate
+#       pip install -r requirements.txt
+#
+#   沒有 3.11 的話最省事的還是裝 uv：winget install --id astral-sh.uv -e
+#   然後 uv python install 3.11——不必自己去官網抓、也不會弄亂系統的 Python。
+
+# ── 執行期（pyproject 的 dependencies）────────────────────────────
+pydantic==2.13.5
+PyYAML==6.0.3
+
+# ── 外殼介面（extra: ui）──────────────────────────────────────────
+streamlit==1.64.0
+
+# ── 開發工具（extra: dev）────────────────────────────────────────
+pytest==9.1.1
+pytest-cov==7.1.0
+ruff==0.16.8
+pre-commit==4.6.2
+
+# ── 語料處理（extra: data）。S6／S9 才會用到，預設不裝 ──────────
+# polars>=1.0
+# httpx>=0.27
+# pyarrow>=16.0
+
+# ── S3／S11／S12 還沒選定，pyproject 裡刻意留空 ────────────────────
+#   ml  : TODO(S3)  模型鎖定後補 sentence-transformers / ollama…
+#   ocr : TODO(S11) RapidOCR / PaddleOCR / Tesseract 三選一
+#   rag : TODO(S12) Chroma / Qdrant 二選一
+#
+# ⚠ 之後加 torch 這一類套件時，**不要**在這裡寫死一個版本就當兩邊都裝得起來：
+#   macOS ARM 裝的是 CPU/MPS 版、Windows 要的是 CUDA 版，wheel 來源本來就不同。
+#   那種東西要靠 pyproject 的 [tool.uv.sources] 加平台 marker 處理，
+#   requirements.txt 這個格式表達不了。

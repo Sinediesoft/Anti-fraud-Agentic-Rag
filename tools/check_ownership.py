@@ -31,11 +31,11 @@ def check(author: str, changed: list[str]) -> tuple[list[str], list[str]]:
     configured = [m for m in members if not str(m.get("github", "")).startswith("TODO")]
 
     if not configured:
-        return [], ["⚠️  .github/team.yml 的 GitHub 帳號還沒填（S1 第 3 步），這次只提醒不擋。"]
+        return [], ["[!]  .github/team.yml 的 GitHub 帳號還沒填（S1 第 3 步），這次只提醒不擋。"]
 
     me = next((m for m in configured if m.get("github", "").lower() == author.lower()), None)
     if me is None:
-        return [], [f"⚠️  {author} 不在 .github/team.yml 裡，跳過檢查。"]
+        return [], [f"[!]  {author} 不在 .github/team.yml 裡，跳過檢查。"]
 
     my_dir = str(me.get("module_dir", "")).rstrip("/") + "/"
     errors: list[str] = []
@@ -48,11 +48,11 @@ def check(author: str, changed: list[str]) -> tuple[list[str], list[str]]:
         if f.startswith(MODULES_PREFIX) and not f.startswith(my_dir):
             owner_dir = "/".join(f.split("/")[:3]) + "/"
             if owner_dir.rstrip("/").split("/")[-1].startswith("_"):
-                notes.append(f"ℹ️  {f} 屬於範本模組，W2 之後應該只有 bug 修正。")
+                notes.append(f"[i]  {f} 屬於範本模組，W2 之後應該只有 bug 修正。")
                 continue
-            errors.append(f"❌ {f} 不是你的模組資料夾（你的是 {my_dir}）")
+            errors.append(f"[X] {f} 不是你的模組資料夾（你的是 {my_dir}）")
         elif any(f.startswith(p) for p in team.get("shared_paths", [])):
-            notes.append(f"ℹ️  {f} 是共用層，凍結後只准修 bug，而且要全員審。")
+            notes.append(f"[i]  {f} 是共用層，凍結後只准修 bug，而且要全員審。")
 
     return errors, notes
 
@@ -74,7 +74,7 @@ def main() -> int:
     if errors:
         print("\n五套程式互不相認 —— 需要別人改東西請開 Issue（§1.7），不要直接動他的資料夾。")
         return 1
-    print("✅ 修改範圍檢查通過")
+    print("[OK] 修改範圍檢查通過")
     return 0
 
 

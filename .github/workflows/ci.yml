@@ -34,8 +34,18 @@ jobs:
             --changed-files /tmp/changed.txt
 
   test:
-    name: 測試
-    runs-on: ubuntu-latest
+    # 五個人裡四個用 Windows，但這個 job 原本只跑 Ubuntu——於是 Windows-only
+    # 的問題（cp950 編碼、行尾、路徑）在 CI 上永遠是綠燈，只有本機會炸，
+    # 而且是四個人各自踩一次。
+    #
+    # fail-fast: false：要讓「只有 Windows 壞」跟「兩邊都壞」一眼分得出來，
+    # 前者是相容性問題、後者是程式真的錯了，處理方式完全不同。
+    name: 測試（${{ matrix.os }}）
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
