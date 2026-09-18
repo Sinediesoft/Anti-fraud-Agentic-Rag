@@ -15,6 +15,7 @@ members:
     github: TODO-github-id-a      # ← 這是你
     name: TODO-姓名
     os: macOS
+    gpu: Apple M5 (10核) / 16GB 統一記憶體
     module_dir: packages/modules/a_tbd
     platform: TODO-平台           # TODO：平台 × 詐騙手法尚未決定
     tactic: TODO-詐騙手法
@@ -23,6 +24,7 @@ members:
     github: TODO-github-id-b
     name: TODO-姓名
     os: Windows
+    gpu: GTX 1050 Ti / 4GB
     module_dir: packages/modules/b_tbd
     platform: TODO-平台
     tactic: TODO-詐騙手法
@@ -31,6 +33,7 @@ members:
     github: TODO-github-id-c
     name: TODO-姓名
     os: Windows
+    gpu: GTX 1650 / 4GB
     module_dir: packages/modules/c_tbd
     platform: TODO-平台
     tactic: TODO-詐騙手法
@@ -39,6 +42,7 @@ members:
     github: TODO-github-id-d
     name: TODO-姓名
     os: Windows
+    gpu: GTX 1650 / 4GB
     module_dir: packages/modules/d_tbd
     platform: TODO-平台
     tactic: TODO-詐騙手法
@@ -47,13 +51,19 @@ members:
     github: TODO-github-id-e
     name: TODO-姓名
     os: Windows
+    gpu: RTX 5070 Ti / 16GB
     module_dir: packages/modules/e_tbd
     platform: TODO-平台
     tactic: TODO-詐騙手法
     plan: paid
 
 # S16/S22 的展示機：那台要裝得起全部五個模組的依賴，W5 結束前先試裝一次
-demo_machine: TODO-S3   # 填成員代號，例：A
+# 建議 E（RTX 5070 Ti / 16GB，全隊最快），但這要 S3 站立會決定
+demo_machine: TODO-S3   # 填成員代號，例：E
+
+# 全隊顯卡天花板 4GB（B/C/D），所以地端模型只能用 3B 級
+# 詳見 docs/model-lock.md 的「模型尺寸決策」
+vram_floor_gb: 4
 
 # 這些路徑全員共管，W1–W2 做完就凍結（規矩三）
 shared_paths:
