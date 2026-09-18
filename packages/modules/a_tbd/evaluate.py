@@ -51,7 +51,7 @@ def run() -> dict[str, float]:
 
     rows = shared_eval.score_table(scores)
     for row in rows:
-        mark = "[OK]" if row.passed else "[X]"
-        arrow = ">=" if row.direction == "ge" else "<="
+        mark = "✅" if row.passed else "❌"
+        arrow = "≥" if row.direction == "ge" else "≤"
         print(f"  {mark} {row.metric:<18} {row.value:.3f}  （門檻 {arrow} {row.threshold}）")
     return scores
