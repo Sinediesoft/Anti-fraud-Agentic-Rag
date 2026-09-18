@@ -12,7 +12,7 @@ owner_org: TODO-github-owner      # TODO(S1)：開儲存庫那個人的帳號或
 
 members:
   - code: A
-    github: TODO-github-id-a      # ← 這是你
+    github: Sinediesoft      # ← 這是你
     name: TODO-姓名
     os: macOS
     gpu: Apple M5 (10核) / 16GB 統一記憶體
