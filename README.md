@@ -21,6 +21,30 @@ make run MODULE=all           # 啟動介面（全部模組）
 make selfcheck MODULE=a_tbd   # S16 入場檢查七項
 ```
 
+> [!CAUTION]
+> ### 🔴 Windows 開發者必讀
+>
+> 本隊是 **1 台 macOS ＋ 4 台 Windows**。說明書假設全隊環境一致，有幾個步驟照原文做會卡住。
+> **動手前請先讀 [說明書補充：跨平台差異](docs/說明書補充-跨平台差異.md)**，重點三條：
+>
+> 1. 🔴 **Windows 沒有 `make`** —— 直接打原始指令即可，不需要安裝（對照表見下）
+> 2. 🔴 **Windows 的 Python 預設編碼是 cp950**，中文語料會爆 —— 請執行 `setx PYTHONUTF8 1`
+> 3. 🔴 **Git for Windows 安裝時選 `Checkout as-is`** —— 否則 `Makefile` 會變 CRLF 而失效
+>    （本 repo 已用 `.gitattributes` 兜底，但自己設一次比較保險）
+
+### Windows 指令對照表
+
+| 說明書寫的 | 🔴 Windows 改打這個 |
+|---|---|
+| `make install` | `uv sync --extra dev --extra ui` |
+| `make test` | `uv run pytest -q` |
+| `make check` | `uv run python tools/check_boundaries.py` |
+| `make run MODULE=a_tbd` | `uv run streamlit run app/ui.py -- --module=a_tbd` |
+| `make eval MODULE=a_tbd` | `uv run python -m app.cli eval --module=a_tbd` |
+| `make selfcheck MODULE=a_tbd` | `uv run python -m app.cli selfcheck --module=a_tbd` |
+
+完整對照與其他差異見 [說明書補充：跨平台差異](docs/說明書補充-跨平台差異.md)。
+
 ## 目前狀態
 
 | 階段 | 步驟 | 狀態 |
@@ -63,8 +87,9 @@ data/                    語料放這裡（不進版控）
 
 ## 文件
 
+- 🔴 **[說明書補充：跨平台差異](docs/說明書補充-跨平台差異.md)** ← Windows 組員動手前必讀
 - [架構](docs/architecture.md)
 - [GitHub 協作速查](docs/github-協作速查.md) ← 每天都會用
 - [模型版本表](docs/model-lock.md)
 - [怎麼新增第六個模組](docs/新增模組.md)
-- [開發步驟示範說明書.pdf](開發步驟示範說明書.pdf)
+- 開發步驟示範說明書.pdf —— 不進版控（repo 公開），請到共用雲端硬碟取得

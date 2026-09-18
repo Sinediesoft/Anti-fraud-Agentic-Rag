@@ -2,6 +2,15 @@
 
 五個人、五台電腦、一個產品。這一章每天都會用到。
 
+> [!CAUTION]
+> 🔴 **Windows 組員第一次設定時多做一步**（說明書 §1.3 沒寫到）：
+> ```
+> git config --global core.autocrlf input
+> ```
+> 否則 checkout 時 `Makefile` 會被轉成 CRLF 而失效。
+> 本 repo 的 `.gitattributes` 已經兜底，但自己設一次比較保險。
+> 其餘差異見 [說明書補充：跨平台差異](說明書補充-跨平台差異.md)。
+
 ## 每天的固定流程
 
 ```bash
