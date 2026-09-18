@@ -1,0 +1,36 @@
+# 換行符一律 LF（說明書 §1.3 / S2 的跨平台補充）
+#
+# Windows 的 git 預設 core.autocrlf=true，checkout 時會把 LF 轉成 CRLF。後果：
+#   1. Makefile 變成 CRLF → make 直接爆「missing separator」
+#   2. pre-commit 的 end-of-file-fixer 跟 Windows 的自動轉換互相打架，永遠改不完
+#   3. 每個檔案顯示為「整份修改過」的假 diff，把真正的改動淹掉
+#
+# 這個檔案把全 repo 釘死在 LF，五台電腦 clone 下來拿到的位元組完全一樣，
+# 而且優先權高於每個人本機的 core.autocrlf 設定 —— 不需要人人記得去設。
+
+* text=auto eol=lf
+
+# 這幾種一旦變成 CRLF 就會壞掉，明確再釘一次
+Makefile         text eol=lf
+*.py             text eol=lf
+*.sh             text eol=lf
+*.yaml           text eol=lf
+*.yml            text eol=lf
+*.toml           text eol=lf
+*.md             text eol=lf
+*.jsonl          text eol=lf
+.gitignore       text eol=lf
+.gitattributes   text eol=lf
+.python-version  text eol=lf
+
+# 二進位檔不要被當成文字處理（會被改壞）
+*.png            binary
+*.jpg            binary
+*.jpeg           binary
+*.gif            binary
+*.pdf            binary
+*.parquet        binary
+*.gguf           binary
+*.bin            binary
+*.onnx           binary
+*.safetensors    binary
