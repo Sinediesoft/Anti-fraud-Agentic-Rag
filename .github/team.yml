@@ -30,7 +30,7 @@ members:
     tactic: TODO-詐騙手法
     plan: paid
   - code: C
-    github: TODO-github-id-c
+    github: a24209422
     name: TODO-姓名
     os: Windows
     gpu: GTX 1650 / 4GB
