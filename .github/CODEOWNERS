@@ -1,0 +1,20 @@
+# 哪個資料夾歸誰審（說明書 S1）。別人動到你的資料夾時，GitHub 會自動找你審。
+#
+# TODO(S1)：把 TODO-github-id-x 換成真實帳號，換完這張表才會生效。
+#           五個人都要是儲存庫的 Collaborator，否則指派不到。
+
+# 預設：任何沒被下面規則命中的檔案，全員都可以審
+*                               @TODO-github-id-a @TODO-github-id-b @TODO-github-id-c @TODO-github-id-d @TODO-github-id-e
+
+# ── 五個模組，一人一個。九成的 PR 都落在這幾行 ──────────────
+/packages/modules/a_tbd/        @TODO-github-id-a
+/packages/modules/b_tbd/        @TODO-github-id-b
+/packages/modules/c_tbd/        @TODO-github-id-c
+/packages/modules/d_tbd/        @TODO-github-id-d
+/packages/modules/e_tbd/        @TODO-github-id-e
+
+# ── 共用層：改這裡等於改所有人的東西 ───────────────────────
+/packages/contracts/            @TODO-github-id-a @TODO-github-id-b @TODO-github-id-c @TODO-github-id-d @TODO-github-id-e
+/packages/shared/               @TODO-github-id-a @TODO-github-id-b @TODO-github-id-c @TODO-github-id-d @TODO-github-id-e
+/app/                           @TODO-github-id-a @TODO-github-id-b @TODO-github-id-c @TODO-github-id-d @TODO-github-id-e
+/packages/modules/_template/    @TODO-github-id-a @TODO-github-id-b @TODO-github-id-c @TODO-github-id-d @TODO-github-id-e

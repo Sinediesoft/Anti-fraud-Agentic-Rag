@@ -1,0 +1,54 @@
+# 誰管哪一塊（說明書 S1 第 3 步）。CODEOWNERS 與 tools/check_ownership.py 都讀這份。
+#
+# TODO(S1)：第一天全員到齊時，把五個人的 GitHub 帳號與負責組合填進來。
+#           填完要同步更新 .github/CODEOWNERS。
+
+repo: anti-fraud-copilot          # TODO(S1)：改成實際的儲存庫名稱
+owner_org: TODO-github-owner      # TODO(S1)：開儲存庫那個人的帳號或組織名
+
+members:
+  - code: A
+    github: TODO-github-id-a      # ← 這是你
+    name: TODO-姓名
+    module_dir: packages/modules/a_tbd
+    platform: TODO-平台           # TODO：平台 × 詐騙手法尚未決定
+    tactic: TODO-詐騙手法
+    plan: free                    # 說明書：件數最大的一組走免費版開放
+  - code: B
+    github: TODO-github-id-b
+    name: TODO-姓名
+    module_dir: packages/modules/b_tbd
+    platform: TODO-平台
+    tactic: TODO-詐騙手法
+    plan: paid
+  - code: C
+    github: TODO-github-id-c
+    name: TODO-姓名
+    module_dir: packages/modules/c_tbd
+    platform: TODO-平台
+    tactic: TODO-詐騙手法
+    plan: paid
+  - code: D
+    github: TODO-github-id-d
+    name: TODO-姓名
+    module_dir: packages/modules/d_tbd
+    platform: TODO-平台
+    tactic: TODO-詐騙手法
+    plan: paid
+  - code: E
+    github: TODO-github-id-e
+    name: TODO-姓名
+    module_dir: packages/modules/e_tbd
+    platform: TODO-平台
+    tactic: TODO-詐騙手法
+    plan: paid
+
+# 這些路徑全員共管，W1–W2 做完就凍結（規矩三）
+shared_paths:
+  - packages/contracts/   # W1 末凍結，改動要全員同意
+  - packages/shared/      # W2 末凍結，之後只修 bug
+  - app/                  # W2 末凍結，W6 合併週才會再動
+  - packages/modules/_template/
+  - Makefile
+  - pyproject.toml
+  - uv.lock

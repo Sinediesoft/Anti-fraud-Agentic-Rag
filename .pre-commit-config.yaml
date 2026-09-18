@@ -1,0 +1,28 @@
+# 送出修改前的自動檢查（說明書 S2）。裝法：uv run pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]   # 大檔案不准進版控（§1.6）
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.7
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      # 規矩一與規矩二的執法者：模組資料夾不准自己呼叫模型、連網，或 import 別人的模組
+      - id: boundary-check
+        name: 模組越界檢查
+        entry: python tools/check_boundaries.py
+        language: system
+        pass_filenames: false
+        always_run: true

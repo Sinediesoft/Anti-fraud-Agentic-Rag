@@ -1,0 +1,48 @@
+# ═══════════════════════════════════════════════════════════════
+#  行動劇本 — 待填（說明書 S14 第 4 點）
+#
+#  平台 × 手法決定後，這份檔案是你整個模組最重要的產出：
+#  前面所有的文字辨識、檢索、抽取都只是為了把人準確帶到這一頁。
+#
+#  三條規則：
+#    一、每個階段都要有行動，高風險階段不得為空
+#    二、行動要具體到能執行
+#        可以做：「立即撥打 165 並聯繫匯款銀行申請圈存」
+#        不能做：「提高警覺」
+#    三、你的第一條行動要跟其他四個模組明顯不同。
+#        如果五個人的第一條都是「撥打 165」，那分工就白做了
+#
+#  下面是階段骨架，名稱與內容都要換成你這一類真實的歷程。
+# ═══════════════════════════════════════════════════════════════
+
+stages:
+  - id: early
+    name: TODO-接觸階段的名字
+    risk: medium
+    explanation: TODO-用白話解釋這一步發生什麼事
+    cues: []            # TODO：這個階段在受害者敘述裡會出現的詞
+    actions:
+      - text: TODO-這個階段第一件該做的事，動詞開頭
+        urgency: today
+
+  - id: mid
+    name: TODO-進行中階段的名字
+    risk: high
+    explanation: TODO
+    cues: []
+    actions:
+      - text: TODO-高風險階段不得為空
+        urgency: now
+        why: TODO-為什麼要做這件事
+
+  - id: late
+    name: TODO-已受損階段的名字
+    risk: critical
+    explanation: TODO
+    cues: []
+    actions:
+      - text: TODO-最緊急的那一條
+        urgency: now
+        why: TODO
+
+fallback_stage: early

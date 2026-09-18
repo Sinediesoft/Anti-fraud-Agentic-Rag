@@ -1,0 +1,57 @@
+# 範本模組。底線開頭，外殼掃描時會自動略過，不會被當成產品的一部分。
+# 五個人一起把它從 M1 做到 M5（S8），做完每個人複製一份，換成自己的東西。
+id: _template
+code: "T"
+name: 範本模組
+owner: 全隊
+version: "0.1.0"
+plan: paid
+
+# 說明書 S8 指定用一個不在五組內的類別：有真資料、有真困難，但不屬於任何人
+platform: 不限
+tactic: 假中獎通知詐騙
+
+labels_canon:
+  - 假中獎通知詐騙
+label_aliases:
+  - 假中獎
+  - 中獎通知詐騙
+platform_terms:
+  - 簡訊
+  - 電子郵件
+  - 臉書
+route_terms:
+  - 中獎
+  - 抽中
+  - 得獎
+  - 兌獎
+  - 領獎
+  - 手續費
+  - 稅金
+negative_terms:
+  - 投資
+  - 交友
+
+knowledge_refs:
+  - title: 中華民國刑法
+    article: 第 339 條
+    version_date: "2019-05-29"
+    note: 普通詐欺罪
+
+thresholds:
+  route_min: 0.55
+  route_hint_min: 0.35
+priority: 900
+
+deliverables:
+  m1: m1_corpus.py
+  m2: m2_vision.py
+  m3: m3_retrieval.py
+  m4: m4_judgement.py
+  m5: m5_agent.py
+  playbook: playbook.yaml
+  report: REPORT.md
+
+stats:
+  total_cases: null        # S9 第 4 點：這個手法總共幾筆
+  platform_cases: null     # 其中在我的平台上的幾筆

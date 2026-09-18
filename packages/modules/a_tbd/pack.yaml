@@ -1,0 +1,59 @@
+# ═══════════════════════════════════════════════════════════════
+#  模組 A — 平台 × 詐騙手法尚未決定
+#
+#  決定之後要改的地方（照順序做）：
+#    1. 這份檔案的 platform / tactic / labels_canon / label_aliases /
+#       platform_terms / route_terms / negative_terms / knowledge_refs
+#    2. 資料夾改名：packages/modules/a_tbd → a_<平台>_<手法>
+#       （例：a_fb_shopping），pack.yaml 的 id 要跟資料夾名一致
+#    3. .github/team.yml 與 .github/CODEOWNERS 的路徑
+#    4. playbook.yaml 的階段與行動清單
+#
+#  在填完 platform / tactic / labels_canon 之前，can_handle() 一律回 0，
+#  外殼會把案子判成「尚未涵蓋」—— 空置狀態下不會亂搶案子，也不會給錯建議。
+# ═══════════════════════════════════════════════════════════════
+id: a_tbd
+code: "A"
+name: 模組 A（未命名）
+owner: TODO-你的名字
+version: "0.1.0"
+
+# 說明書：A 是免費版開放的那一組（件數最大的一類）
+plan: free
+
+# TODO：平台 × 詐騙手法尚未決定
+platform: ""
+tactic: ""
+
+# TODO(S9)：從 S6 的手法 × 平台交叉表挑出屬於自己的分類
+labels_canon: []
+# TODO(S9)：官方原始的各種寫法（含前後多餘空白的變體）
+label_aliases: []
+# TODO(S9)：你的平台在受害者口中會怎麼被講
+#           例：Facebook → 臉書 / FB / 粉專 / 社團；LINE → LINE / 加賴
+platform_terms: []
+# TODO(S9)：這一類特有的話術詞彙。抽 30 筆親自讀完之後補進來
+route_terms: []
+# TODO(S9)：出現就要扣分的詞，用來跟隔壁模組分開
+negative_terms: []
+
+# TODO(S12)：整理你適用的法條與 165 話術庫段落。條號與版本日期都要確認
+knowledge_refs: []
+
+thresholds:
+  route_min: 0.55       # TODO(S18)：調路由時依混淆矩陣回來調這個數字
+  route_hint_min: 0.35
+priority: 10            # A 先掛（S17 的順序），分數打平時優先
+
+deliverables:
+  m1: m1_corpus.py
+  m2: m2_vision.py
+  m3: m3_retrieval.py
+  m4: m4_judgement.py
+  m5: m5_agent.py
+  playbook: playbook.yaml
+  report: REPORT.md
+
+stats:
+  total_cases: null       # TODO(S9)：這個手法總共幾筆
+  platform_cases: null    # TODO(S9)：其中在我的平台上的幾筆（門檻 2,000 筆）

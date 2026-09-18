@@ -1,0 +1,48 @@
+# 機器人（說明書 S1 第 5 步）。每次有 PR 就自動跑，紅燈不准合併。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  guard:
+    name: 越界檢查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --extra dev
+
+      # 檢查二：模組資料夾裡有沒有 import 模型套件、連網套件，或別人的模組
+      - name: 模組越界 import 檢查
+        run: uv run python tools/check_boundaries.py
+
+      # 檢查一：PR 有沒有改到不該他改的資料夾
+      - name: 修改範圍檢查
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          git diff --name-only origin/${{ github.base_ref }}...HEAD > /tmp/changed.txt
+          uv run python tools/check_ownership.py \
+            --author "${{ github.event.pull_request.user.login }}" \
+            --changed-files /tmp/changed.txt
+
+  test:
+    name: 測試
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --extra dev
+      - name: ruff
+        run: uv run ruff check .
+      - name: pytest
+        run: uv run pytest -q

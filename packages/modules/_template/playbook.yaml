@@ -1,0 +1,49 @@
+# 行動劇本（說明書 S14 第 4 點）。
+# 定義這一類有哪些階段、每個階段該做什麼。高風險階段至少要有一條行動。
+# 行動要具體到能執行：「立即撥打 165 並聯繫匯款銀行申請圈存」可以做，「提高警覺」不能做。
+
+stages:
+  - id: contacted
+    name: 剛收到通知
+    risk: medium
+    explanation: 你收到了中獎通知，但還沒有付出任何錢。這是最好處理的時間點。
+    cues: [收到, 通知, 簡訊, 中獎]
+    actions:
+      - text: 不要點通知裡的任何連結，也不要回撥上面的電話。
+        urgency: now
+        why: 連結與電話是對方唯一能繼續接觸你的管道。
+      - text: 直接到主辦單位的官方網站或官方客服查證有沒有這個活動。
+        urgency: today
+
+  - id: paying
+    name: 被要求先付錢
+    risk: high
+    explanation: 對方用手續費、稅金、保證金的名義要你先匯錢。合法的獎項不會要你先付費。
+    cues: [手續費, 稅金, 保證金, 匯款, 先付]
+    actions:
+      - text: 現在不要匯這筆錢。合法獎項不會要求得獎人先付任何費用。
+        urgency: now
+        why: 這筆錢匯出去之後，對方會用同樣的理由要第二筆。
+      - text: 撥打 165 說明你收到的通知內容，確認這個活動是不是詐騙。
+        urgency: now
+
+  - id: paid
+    name: 已經匯款
+    risk: critical
+    explanation: 錢已經出去了。接下來的關鍵是阻止第二筆，以及盡快讓銀行圈存。
+    cues: [已匯, 匯了, 轉帳了, 付了]
+    actions:
+      - text: 立即撥打 165，並聯繫匯款銀行申請圈存。
+        urgency: now
+        why: 圈存越早越有機會攔下還沒被提走的錢。
+      - text: 停止再匯任何一筆錢，包含對方說「補稅金才能退款」的那一筆。
+        urgency: now
+        why: 為了拿回錢再付一次，是這類詐騙損失擴大的主因。
+      - text: 保留所有對話紀錄、匯款單據與對方帳號，不要刪除也不要封鎖。
+        urgency: today
+        why: 這些是報案時唯一的證據。
+      - text: 接下來可能會接到自稱「協助辦理退款」的電話，那是第二波。
+        urgency: normal
+        preventive: true
+
+fallback_stage: contacted

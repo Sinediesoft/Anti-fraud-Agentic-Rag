@@ -1,0 +1,45 @@
+# ── 大檔案絕不進版控（說明書 §1.6）────────────────────────
+# 用 /data/* 而不是 data/：後者會連 packages/modules/*/data/ 一起排除，
+# 而且被排除的「目錄」裡的 ! 例外規則不會生效
+/data/*
+!/data/README.md
+*.parquet
+*.gguf
+*.bin
+*.safetensors
+*.onnx
+chroma_db/
+qdrant_storage/
+packages/modules/*/data/*
+!packages/modules/*/data/.gitkeep
+packages/modules/*/index/
+
+# 說明書 PDF 不進版控（repo 是公開的，內含 165 未公布的內部端點）
+# 檔案留在本機，組員改用共用雲端硬碟分享
+*.pdf
+
+# 模擬截圖可以進版控（每人 20 張、總共 < 10MB），故不忽略 screenshots/
+
+# ── Python ────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# ── 金鑰與本機設定 ────────────────────────────────────
+.env
+.env.*
+!.env.example
+secrets/
+
+# ── 作業系統 / 編輯器 ─────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
