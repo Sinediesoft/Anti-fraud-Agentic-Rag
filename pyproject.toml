@@ -29,9 +29,14 @@ data = [
     "httpx>=0.27",
     "pyarrow>=16.0",
 ]
-# TODO(S3)：模型鎖定後補上 sentence-transformers / ollama 等
+# TODO(S3)：模型鎖定後補上 sentence-transformers 等
+# 跨平台注意：嵌入與重排序要固定 device="cpu"、dtype=float32，
+#             否則 Mac(MPS/fp16) 與 Windows(CUDA/fp32) 算出來的向量不同、分數不能比。
+#             地端 SLM 走原生 Ollama，不列在這裡。
 ml = []
-# TODO(S11)：OCR 引擎由各自比較後選定（RapidOCR / PaddleOCR / Tesseract）
+# TODO(S11)：OCR 引擎由各自比較後選定，但必須 macOS 與 Windows 都裝得起來
+#            —— 實務上就是 RapidOCR。PaddleOCR 在 Apple Silicon 常裝不起來。
+#            OpenCV 請用 opencv-python-headless，一般版在 CI(Linux) 需要 libGL 會失敗。
 ocr = []
 # TODO(S12)：向量庫由各自選定（Chroma / Qdrant）
 rag = []
