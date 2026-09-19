@@ -36,12 +36,14 @@ jobs:
 
       # 檢查二：模組資料夾裡有沒有 import 模型套件、連網套件，或別人的模組
       # tee 到 detail/ 是給 PR 機器人用的 —— 讓它能把實際錯誤貼進留言，
-      # 而不是只說「失敗了，自己去翻 log」。
+      # 而不是只說「失敗了，自己去翻 log」。兩種檢查分開存：它們是完全
+      # 不同的問題（import 越界 vs 動到別人資料夾），建議也不一樣，
+      # 混在同一個檔會讓機器人講錯話。
       - name: 模組越界 import 檢查
         run: |
           mkdir -p detail
           set -o pipefail
-          uv run python tools/check_boundaries.py 2>&1 | tee -a detail/guard.txt
+          uv run python tools/check_boundaries.py 2>&1 | tee detail/boundaries.txt
 
       # 檢查一：PR 有沒有改到不該他改的資料夾
       # always()：上一步炸了這步也要跑，兩個問題一次講完比讓人來回兩趟好
@@ -54,7 +56,7 @@ jobs:
           git diff --name-only origin/${{ github.base_ref }}...HEAD > /tmp/changed.txt
           uv run python tools/check_ownership.py \
             --author "${{ github.event.pull_request.user.login }}" \
-            --changed-files /tmp/changed.txt 2>&1 | tee -a detail/guard.txt
+            --changed-files /tmp/changed.txt 2>&1 | tee detail/ownership.txt
 
       - name: 保存輸出給 PR 機器人
         if: always()

@@ -117,17 +117,41 @@ def build(results: dict[str, str], detail_dir: Path) -> str:
         lines += [note, ""]
 
     if guard == "failure":
-        lines += ["### 越界檢查沒過", ""]
-        d = detail(detail_dir, "guard.txt")
-        if d:
-            lines += ["```", d, "```", ""]
-        lines += [
-            "你動到了不屬於你的模組資料夾。五套程式互不相認 —— 需要別人改東西"
-            "請開 Issue（§1.7），不要直接動他的資料夾。",
-            "",
-            "如果你覺得判斷錯了，八成是 `.github/team.yml` 裡你的帳號或 `module_dir` 沒填對。",
-            "",
-        ]
+        # 這個 job 包兩種檢查，是完全不同的問題，建議也不一樣。
+        # 不分開講的話，import 越界的人會看到「你動到別人資料夾」這種錯誤指引。
+        boundaries = detail(detail_dir, "boundaries.txt")
+        ownership = detail(detail_dir, "ownership.txt")
+
+        if "[X]" in boundaries:
+            lines += ["### 模組越界 import", "", "```", boundaries, "```", ""]
+            lines += [
+                "模組資料夾裡不准出現三樣東西：模型套件（torch、transformers…）、"
+                "連網套件（requests、httpx…）、別人的模組。",
+                "",
+                "模型呼叫一律走 `shared.models`，五個人才會用到同一組模型；"
+                "出網的口只有 `shared.models.call_cloud` 一個，原文才不會離開"
+                "使用者的電腦。",
+                "",
+            ]
+
+        if "[X]" in ownership:
+            lines += ["### 改到別人的資料夾", "", "```", ownership, "```", ""]
+            lines += [
+                "五套程式互不相認 —— 需要別人改東西請開 Issue（§1.7），不要直接動他的資料夾。",
+                "",
+                "如果你覺得判斷錯了，八成是 `.github/team.yml` 裡你的帳號或 `module_dir` 沒填對。",
+                "",
+            ]
+
+        # 兩個檔都沒有 [X] 卻紅了：job 本身出問題（裝不起來、逾時之類）
+        if "[X]" not in boundaries and "[X]" not in ownership:
+            lines += [
+                "### 越界檢查沒過",
+                "",
+                "檢查程式本身沒報錯，是 job 出了問題（依賴裝不起來、逾時之類）。"
+                "點進 Actions 看完整 log。",
+                "",
+            ]
 
     if deps == "failure":
         lines += ["### 相依同步檢查沒過", ""]
