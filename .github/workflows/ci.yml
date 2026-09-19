@@ -1,10 +1,25 @@
-# 機器人（說明書 S1 第 5 步）。每次有 PR 就自動跑，紅燈不准合併。
+# 機器人（說明書 S1 第 5 步）。每次有 PR 就自動跑。
+#
+# 注意：紅燈**不會**擋住合併。main 的 ruleset 只擋刪除與 force push，
+# 沒有 required status checks，所以這裡全部是「告訴你」不是「攔住你」。
+# 要改成真的擋，是在 ruleset 加 required_status_checks 把下面幾個 job
+# 的名稱點進去，跟這個檔案無關。
 name: CI
 
 on:
   pull_request:
   push:
     branches: [main]
+
+# 預設唯讀；只有要留言的那個 job 額外要 pull-requests: write
+permissions:
+  contents: read
+
+# 連推三次 commit 就有三個 run 在跑，舊的既浪費額度又拖慢新的回饋。
+# 只對 PR 取消 —— main 上的 run 是歷史紀錄，不該被後來的推送砍掉。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   guard:
@@ -20,18 +35,62 @@ jobs:
       - run: uv sync --extra dev
 
       # 檢查二：模組資料夾裡有沒有 import 模型套件、連網套件，或別人的模組
+      # tee 到 detail/ 是給 PR 機器人用的 —— 讓它能把實際錯誤貼進留言，
+      # 而不是只說「失敗了，自己去翻 log」。兩種檢查分開存：它們是完全
+      # 不同的問題（import 越界 vs 動到別人資料夾），建議也不一樣，
+      # 混在同一個檔會讓機器人講錯話。
       - name: 模組越界 import 檢查
-        run: uv run python tools/check_boundaries.py
+        run: |
+          mkdir -p detail
+          set -o pipefail
+          uv run python tools/check_boundaries.py 2>&1 | tee detail/boundaries.txt
 
       # 檢查一：PR 有沒有改到不該他改的資料夾
+      # always()：上一步炸了這步也要跑，兩個問題一次講完比讓人來回兩趟好
       - name: 修改範圍檢查
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         run: |
+          mkdir -p detail
+          set -o pipefail
           git fetch origin ${{ github.base_ref }} --depth=1
           git diff --name-only origin/${{ github.base_ref }}...HEAD > /tmp/changed.txt
           uv run python tools/check_ownership.py \
             --author "${{ github.event.pull_request.user.login }}" \
-            --changed-files /tmp/changed.txt
+            --changed-files /tmp/changed.txt 2>&1 | tee detail/ownership.txt
+
+      - name: 保存輸出給 PR 機器人
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detail-guard
+          path: detail/
+          retention-days: 3
+          if-no-files-found: ignore
+
+  deps:
+    # 檢查三：requirements.txt 是手寫的 uv.lock 鏡像，一定會有人忘記更新。
+    # 忘記的後果：用 uv 的（CI 與 macOS）跟用 pip 的（四台 Windows）裝到
+    # 不同版本，然後就是「我這邊明明可以跑」。
+    #
+    # 這支只用標準函式庫（tomllib），不必 uv sync，所以跑得很快。
+    name: 相依同步檢查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: requirements.txt 與 uv.lock 是否同步
+        run: |
+          mkdir -p detail
+          set -o pipefail
+          python3 tools/check_requirements_sync.py 2>&1 | tee detail/deps.txt
+
+      - name: 保存輸出給 PR 機器人
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detail-deps
+          path: detail/
+          retention-days: 3
+          if-no-files-found: ignore
 
   test:
     # 五個人裡四個用 Windows，但這個 job 原本只跑 Ubuntu——於是 Windows-only
@@ -40,6 +99,7 @@ jobs:
     #
     # fail-fast: false：要讓「只有 Windows 壞」跟「兩邊都壞」一眼分得出來，
     # 前者是相容性問題、後者是程式真的錯了，處理方式完全不同。
+    # 這個區分現在由 PR 機器人直接寫在留言裡，不必人去比對兩個 job。
     name: 測試（${{ matrix.os }}）
     strategy:
       fail-fast: false
@@ -56,3 +116,30 @@ jobs:
         run: uv run ruff check .
       - name: pytest
         run: uv run pytest -q
+
+  report:
+    # 把上面幾個 job 的結果翻成白話，附可複製的修復指令，留在 PR 上。
+    # always()：前面紅了才更需要這則留言。
+    name: PR 報告
+    if: always() && github.event_name == 'pull_request'
+    needs: [guard, deps, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: detail-*
+          merge-multiple: true
+      - name: 留言
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 tools/pr_report.py \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --run-id "${{ github.run_id }}" \
+            --detail-dir artifacts
