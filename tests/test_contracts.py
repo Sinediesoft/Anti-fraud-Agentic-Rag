@@ -30,6 +30,21 @@ def test_相似案例一定要有案例編號():
         SimilarCase(case_id="", excerpt="…")
 
 
+def test_相似案例帶得動來源():
+    """語料不綁死單一來源，所以出處是 source + case_id，不是 case_id 自己。
+
+    混來源時 case_id 一定會撞號 —— 兩份資料各自從 1 開始編很正常。
+    """
+    a = SimilarCase(case_id="1", source="165", excerpt="…")
+    b = SimilarCase(case_id="1", source="police-open", excerpt="…")
+    assert (a.source, a.case_id) != (b.source, b.case_id)
+
+
+def test_來源預設是主語料():
+    """預設 165 是為了不破壞既有程式；加別的來源時要明寫。"""
+    assert SimilarCase(case_id="1", excerpt="…").source == "165"
+
+
 def test_高風險等級判定():
     assert RiskLevel.CRITICAL.is_severe
     assert RiskLevel.HIGH.is_severe

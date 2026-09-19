@@ -140,7 +140,15 @@ class SimilarCase(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    case_id: str = Field(min_length=1, description="165 案例編號。空字串會被外殼擋下來")
+    case_id: str = Field(min_length=1, description="案例編號。空字串會被外殼擋下來")
+    source: str = Field(
+        default="165",
+        description=(
+            "這筆案例來自哪個語料來源。多來源時 case_id 會撞號 —— "
+            "兩份資料各自從 1 開始編都很正常，所以出處要靠 source + case_id "
+            "才唯一。預設 165 是因為它是主語料，加別的來源時務必明寫。"
+        ),
+    )
     excerpt: str = Field(description="【遮蔽】節錄或改寫，絕不投影真實受害者原文")
     date: str | None = Field(default=None, description="案件日期")
     county: str | None = Field(default=None, description="縣市")
@@ -149,7 +157,7 @@ class SimilarCase(BaseModel):
 
 
 class LegalRef(BaseModel):
-    """法條或 165 話術庫出處。條號要標版本日期，法規會修（S12 第 5 點）。"""
+    """法條或話術庫出處。條號要標版本日期，法規會修（S12 第 5 點）。"""
 
     model_config = ConfigDict(extra="forbid")
 

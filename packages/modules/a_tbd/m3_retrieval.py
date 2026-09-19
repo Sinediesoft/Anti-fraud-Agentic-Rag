@@ -64,6 +64,7 @@ def search(query: str, *, top_k: int = 5, cases: list[Case] | None = None) -> li
         out.append(
             SimilarCase(
                 case_id=case.case_id,
+                source=case.source,
                 excerpt=safe.text[:120],
                 date=case.date or None,
                 county=case.county or None,
