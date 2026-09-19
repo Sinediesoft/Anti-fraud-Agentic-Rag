@@ -15,7 +15,7 @@ owner_org: Sinediesoft            # 開儲存庫的那個人
 members:
   - code: A
     github: Sinediesoft      # ← 這是你
-    name: TODO-姓名
+    name: Sinediesoft
     os: macOS
     gpu: Apple M5 (10核) / 16GB 統一記憶體
     module_dir: packages/modules/a_tbd
@@ -24,7 +24,7 @@ members:
     plan: free                    # 說明書：件數最大的一組走免費版開放
   - code: B
     github: shin5shin
-    name: TODO-姓名
+    name: shin5shin
     os: Windows
     gpu: GTX 1050 Ti / 4GB
     module_dir: packages/modules/b_tbd
@@ -33,7 +33,7 @@ members:
     plan: paid
   - code: C
     github: a24209422
-    name: TODO-姓名
+    name: a24209422
     os: Windows
     gpu: GTX 1650 / 4GB
     module_dir: packages/modules/c_tbd
