@@ -1,0 +1,120 @@
+# ═══════════════════════════════════════════════════════════════
+#  模組 E — 求職平台 × 人頭帳戶
+#
+#  平台 × 手法依說明書 §0.2 的分組表（E：求職平台 × 人頭帳戶，2,642 筆）。
+#  但 labels_canon 要等 S6 的手法 × 平台交叉表出來才填得了（PR #24 尚未合併）。
+#
+#  在 labels_canon 填上之前 is_configured 為 False，can_handle() 一律回 0，
+#  外殼會把案子判成「尚未涵蓋」—— 不會亂搶案子，也不會給錯建議。
+#
+#  接下來要改的地方（照順序）：
+#    1. S9  labels_canon / label_aliases，並用真實語料校正下面的三組詞
+#    2. S9  stats 的兩個數字
+#    3. S12 knowledge_refs 的條號與版本日期
+#    4. S14 playbook.yaml 的階段與行動清單
+#    5. 資料夾改名 e_tbd → e_jobboard_mule，pack.yaml 的 id 要跟著改，
+#       並同步 .github/team.yml 與 .github/CODEOWNERS 的路徑
+# ═══════════════════════════════════════════════════════════════
+id: e_tbd
+code: "E"
+name: 求職平台 × 人頭帳戶
+owner: c85016921920-design
+version: "0.1.0"
+plan: paid
+
+platform: 求職平台
+tactic: 人頭帳戶
+
+# TODO(S9)：從 S6 的交叉表挑出屬於自己的分類。
+# 說明書 S9 提醒 E 是最雜的一組——假求職、假貸款、幫助詐欺散在一堆罕見標籤裡，
+# 還有帶著多餘空白的變體。填上這個之後模組才會真正開始接案子。
+labels_canon: []
+label_aliases: []
+
+# 初版詞表，S9 要抽 30 筆親自讀完之後校正。
+# 說明書：「你的平台在受害者口中會怎麼被講」——求職這組的講法比其他組分散，
+# 因為招募管道橫跨人力銀行、社群社團與通訊軟體。
+platform_terms:
+  - 人力銀行
+  - 求職網
+  - 職缺
+  - 應徵
+  - 面試
+  - 履歷
+  - 打工
+  - 兼職
+  - 日領
+  - 工作機會
+  - 徵才
+  - 招募
+
+# TODO(S9)：這一類特有的話術詞彙，讀完 30 筆案例後補完。
+# 目前這組是依說明書 S11 對 E 的描述（「請提供存摺照片」這類訊息）推的起點。
+route_terms:
+  - 存摺
+  - 提款卡
+  - 金融卡
+  - 帳戶
+  - 網銀
+  - 密碼
+  - 驗證碼
+  - 薪轉
+  - 薪轉戶
+  - 代收
+  - 代轉
+  - 走帳
+  - 公司帳務
+  - 資金調度
+  - 寄件
+  - 超商店到店
+
+# 出現就要扣分的詞，用來跟隔壁模組分開。
+# B／C 是投資、D 是釣魚、A 是網購——這些情境不該被 E 搶走。
+negative_terms:
+  - 投資
+  - 入金
+  - 出金
+  - 老師
+  - 帶單
+  - 交友
+  - 約會
+  - 中獎
+  - 賣家
+  - 買家
+  - 蝦皮
+
+# TODO(S12)：條號與版本日期都要查證後才算數（說明書：沒寫日期等於沒有出處）。
+# 這三條是說明書 S12 為 E 指定的。E 的使用者處境跟其他四組不同——
+# 他可能同時是被害人與被調查的對象，需要的是幫助詐欺與洗錢防制法，
+# 把詐欺犯罪危害防制條例丟給他是答非所問。
+knowledge_refs:
+  - title: 中華民國刑法
+    article: 第 30 條
+    version_date: ""
+    note: 幫助犯。TODO(S12) 查證版本日期
+  - title: 洗錢防制法
+    article: 第 15 條之 2
+    version_date: ""
+    note: 無正當理由交付帳戶。TODO(S12) 查證版本日期
+  - title: 存款帳戶及其疑似不法或顯屬異常交易管理辦法
+    article: ""
+    version_date: ""
+    note: 警示帳戶的處理依據。TODO(S12) 確認正式名稱、條號與版本日期
+
+thresholds:
+  route_min: 0.55       # TODO(S18)：調路由時依混淆矩陣回來調
+  route_hint_min: 0.35
+priority: 50            # A=10。E 排在後面，分數打平時讓位給件數大的組
+
+deliverables:
+  m1: m1_corpus.py
+  m2: m2_vision.py
+  m3: m3_retrieval.py
+  m4: m4_judgement.py
+  m5: m5_agent.py
+  playbook: playbook.yaml
+  report: REPORT.md
+
+stats:
+  total_cases: null        # TODO(S9)：這個手法總共幾筆
+  platform_cases: null     # TODO(S9)：其中在我的平台上的幾筆
