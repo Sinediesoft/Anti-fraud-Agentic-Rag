@@ -192,6 +192,7 @@ def build(results: dict[str, str], detail_dir: Path, author: str = "") -> str:
         # 不分開講的話，import 越界的人會看到「你動到別人資料夾」這種錯誤指引。
         boundaries = detail(detail_dir, "boundaries.txt")
         ownership = detail(detail_dir, "ownership.txt")
+        cp950 = detail(detail_dir, "cp950.txt")
 
         if "[X]" in boundaries:
             lines += ["### 模組越界 import", "", "```", boundaries, "```", ""]
@@ -214,8 +215,20 @@ def build(results: dict[str, str], detail_dir: Path, author: str = "") -> str:
                 "",
             ]
 
-        # 兩個檔都沒有 [X] 卻紅了：job 本身出問題（裝不起來、逾時之類）
-        if "[X]" not in boundaries and "[X]" not in ownership:
+        if "[X]" in cp950:
+            lines += ["### 跨平台輸出（繁中 Windows 會炸）", "", "```", cp950, "```", ""]
+            lines += [
+                "這些字元在 macOS 上沒事，在繁中 Windows（cp950）會 `UnicodeEncodeError`。"
+                "本隊四台是 Windows，而且輸出一旦被接成管道（pre-commit、CI、"
+                "`make eval > out.txt`）就會當場炸掉。",
+                "",
+                "換成 ASCII 即可：勾/叉 -> `[OK]`/`[X]`，大於等於 -> `>=`，小於等於 -> `<=`。"
+                "Streamlit（`app/ui.py`）畫到瀏覽器不走 stdout，不受此限。",
+                "",
+            ]
+
+        # 三個檔都沒有 [X] 卻紅了：job 本身出問題（裝不起來、逾時之類）
+        if "[X]" not in boundaries and "[X]" not in ownership and "[X]" not in cp950:
             lines += [
                 "### 越界檢查沒過",
                 "",
