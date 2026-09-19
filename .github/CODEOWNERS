@@ -1,20 +1,22 @@
 # 哪個資料夾歸誰審（說明書 S1）。別人動到你的資料夾時，GitHub 會自動找你審。
 #
-# TODO(S1)：把 TODO-github-id-x 換成真實帳號，換完這張表才會生效。
-#           五個人都要是儲存庫的 Collaborator，否則指派不到。
+# 五個帳號都已填入，這張表生效中。改動時要同步 .github/team.yml。
+#
+# 前提：五個人都得是儲存庫的 Collaborator（write 以上），否則 GitHub
+# 會報 Unknown owner，那幾行等於不存在。
 
 # 預設：任何沒被下面規則命中的檔案，全員都可以審
-*                               @Sinediesoft @shin5shin @a24209422 @door410 @TODO-github-id-e
+*                               @Sinediesoft @shin5shin @a24209422 @door410 @c85016921920-design
 
 # ── 五個模組，一人一個。九成的 PR 都落在這幾行 ──────────────
 /packages/modules/a_tbd/        @Sinediesoft
 /packages/modules/b_tbd/        @shin5shin
 /packages/modules/c_tbd/        @a24209422
 /packages/modules/d_tbd/        @door410
-/packages/modules/e_tbd/        @TODO-github-id-e
+/packages/modules/e_tbd/        @c85016921920-design
 
 # ── 共用層：改這裡等於改所有人的東西 ───────────────────────
-/packages/contracts/            @Sinediesoft @shin5shin @a24209422 @door410 @TODO-github-id-e
-/packages/shared/               @Sinediesoft @shin5shin @a24209422 @door410 @TODO-github-id-e
-/app/                           @Sinediesoft @shin5shin @a24209422 @door410 @TODO-github-id-e
-/packages/modules/_template/    @Sinediesoft @shin5shin @a24209422 @door410 @TODO-github-id-e
+/packages/contracts/            @Sinediesoft @shin5shin @a24209422 @door410 @c85016921920-design
+/packages/shared/               @Sinediesoft @shin5shin @a24209422 @door410 @c85016921920-design
+/app/                           @Sinediesoft @shin5shin @a24209422 @door410 @c85016921920-design
+/packages/modules/_template/    @Sinediesoft @shin5shin @a24209422 @door410 @c85016921920-design
