@@ -16,12 +16,19 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.request
 from pathlib import Path
 
 API = "https://api.github.com"
 MARKER = "<!-- claude-pr-report -->"
+
+# 環境對齊追蹤表。機器人會讀它，看這個 PR 的作者還有哪幾項沒回報。
+REPO_ROOT = Path(__file__).resolve().parent.parent
+ALIGN_DOC = REPO_ROOT / "docs" / "環境對齊追蹤表.md"
+PENDING_MARK = "⬜"  # 未回報
+MISSING_MARK = "❌"  # 回報了，但缺這項
 
 
 def api(path: str, token: str, method: str = "GET", body: dict | None = None):
@@ -50,6 +57,70 @@ def pick(results: dict[str, str], *needles: str) -> str | None:
         if all(n in name for n in needles):
             return conclusion
     return None
+
+
+def _md_tables(md: str) -> list[tuple[list[str], list[list[str]]]]:
+    """把 markdown 切成 (表頭, 資料列)。只認連續的 | 開頭行。"""
+
+    def cells(line: str) -> list[str]:
+        return [c.strip() for c in line.strip().strip("|").split("|")]
+
+    out, block = [], []
+    for line in md.splitlines() + [""]:
+        if line.lstrip().startswith("|"):
+            block.append(line)
+            continue
+        if len(block) >= 3:  # 表頭 + 分隔線 + 至少一列
+            out.append((cells(block[0]), [cells(x) for x in block[2:]]))
+        block = []
+    return out
+
+
+def pending_items(author: str) -> tuple[str | None, list[str], list[str]]:
+    """這個人在對齊表裡的待處理項目。回傳 (代號, 未回報, 要補裝)。
+
+    ⬜ 與 ❌ 是兩件事：前者是「不知道」，後者是「知道而且缺」。兩種都要
+    提醒，但講法不一樣 —— 一個是去跑指令，一個是去安裝。
+
+    代號從文件自己的表頭反查 —— 第一張表的欄位長這樣：A<br>`Sinediesoft`。
+    這樣就不必再去讀 team.yml（那要 yaml 套件，而這支刻意只用標準函式庫）。
+    """
+    if not ALIGN_DOC.exists():
+        return None, [], []
+    tables = _md_tables(ALIGN_DOC.read_text(encoding="utf-8"))
+
+    needle = f"`{author}`".lower()
+    code = None
+    for header, _ in tables:
+        for cell in header:
+            if needle in cell.lower():
+                m = re.match(r"^([A-E])\b", cell.strip())
+                if m:
+                    code = m.group(1)
+                    break
+        if code:
+            break
+    if code is None:
+        return None, [], []
+
+    pending: list[str] = []
+    missing: list[str] = []
+    for header, rows in tables:
+        idx = next(
+            (i for i, c in enumerate(header) if re.match(rf"^{code}(<br>|$)", c.strip())),
+            None,
+        )
+        if idx is None:
+            continue
+        for row in rows:
+            if len(row) <= idx:
+                continue
+            label = re.sub(r"[`*]", "", row[0]).strip()
+            if PENDING_MARK in row[idx]:
+                pending.append(label)
+            elif MISSING_MARK in row[idx]:
+                missing.append(label)
+    return code, pending, missing
 
 
 def detail(detail_dir: Path, filename: str, limit: int = 1500) -> str:
@@ -85,7 +156,7 @@ def cross_platform_note(ubuntu: str | None, windows: str | None) -> str | None:
     return "❌ **兩邊都紅 → 程式邏輯真的有問題**，不是平台差異。先在本機重現。"
 
 
-def build(results: dict[str, str], detail_dir: Path) -> str:
+def build(results: dict[str, str], detail_dir: Path, author: str = "") -> str:
     guard = pick(results, "越界檢查")
     deps = pick(results, "相依同步")
     ubuntu = pick(results, "測試", "ubuntu")
@@ -108,7 +179,7 @@ def build(results: dict[str, str], detail_dir: Path) -> str:
     failed = [label for label, c in rows if c == "failure"]
     if not failed:
         lines += ["", "全部通過。這則留言只是報告，不影響合併。"]
-        return "\n".join(lines)
+        return "\n".join(lines + alignment_note(author))
 
     lines += ["", "---", ""]
 
@@ -185,7 +256,35 @@ def build(results: dict[str, str], detail_dir: Path) -> str:
         ]
 
     lines += ["---", "", "紅燈**不會**擋住合併，這則留言只是提醒。"]
-    return "\n".join(lines)
+    return "\n".join(lines + alignment_note(author))
+
+
+def alignment_note(author: str) -> list[str]:
+    """還沒對齊環境的人，在他自己的 PR 上點名提醒。
+
+    只點有待辦的人 —— 弄完的人不會被騷擾，這段就自動消失。這比開一個
+    大家都會放著爛的 Issue 有效，因為它出現在他正在做事的地方。
+    """
+    if not author:
+        return []
+    code, pending, missing = pending_items(author)
+    if not code or (not pending and not missing):
+        return []
+
+    server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    doc = "docs/環境對齊追蹤表.md"
+    link = f"[`{doc}`]({server}/{repo}/blob/main/{doc})" if repo else f"`{doc}`"
+
+    out = ["", "---", "", f"### ⚠️ 你的開發環境有待辦（{code} 欄）", ""]
+    if missing:
+        out += [f"**要補裝（{len(missing)}）**：" + " · ".join(missing), ""]
+    if pending:
+        out += [f"**未回報（{len(pending)}）**：" + " · ".join(pending), ""]
+    out += [
+        f"回報指令在 {link}，跑完改自己那一欄。全部弄完這段提醒就會自動消失。",
+    ]
+    return out
 
 
 def upsert_comment(repo: str, token: str, pr: int, body: str) -> None:
@@ -214,7 +313,8 @@ def main() -> int:
         return 1
 
     results = job_results(args.repo, token, args.run_id)
-    body = build(results, Path(args.detail_dir))
+    pr = api(f"/repos/{args.repo}/pulls/{args.pr}", token)
+    body = build(results, Path(args.detail_dir), pr["user"]["login"])
 
     if args.dry_run:
         print(body)
