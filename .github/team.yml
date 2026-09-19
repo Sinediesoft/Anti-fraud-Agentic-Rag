@@ -2,7 +2,7 @@
 #
 # TODO(S1)：第一天全員到齊時，把五個人的 GitHub 帳號與負責組合填進來。
 #           填完要同步更新 .github/CODEOWNERS。
-#           進度：A／B／C 已填，還缺 D／E。
+#           進度：A／B／C／D 已填，還缺 E。
 #
 # os 欄位不是裝飾：本隊是 1 台 macOS + 4 台 Windows，S3 選模型要看最低配那台，
 # S11 選 OCR 與 S16 指定展示機都依賴這份資料。
@@ -26,7 +26,7 @@ members:
     github: shin5shin
     name: shin5shin
     os: Windows
-    gpu: GTX 1050 Ti / 4GB
+    gpu: GTX 1650 / 4GB
     module_dir: packages/modules/b_tbd
     platform: TODO-平台
     tactic: TODO-詐騙手法
@@ -41,10 +41,10 @@ members:
     tactic: TODO-詐騙手法
     plan: paid
   - code: D
-    github: TODO-github-id-d
-    name: TODO-姓名
+    github: door410
+    name: door410
     os: Windows
-    gpu: GTX 1650 / 4GB
+    gpu: GTX 1050 Ti / 4GB
     module_dir: packages/modules/d_tbd
     platform: TODO-平台
     tactic: TODO-詐騙手法

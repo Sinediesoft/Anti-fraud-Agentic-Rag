@@ -33,9 +33,9 @@
 | 成員 | 作業系統 | 模型後端 | 顯示卡 / 晶片 | 顯卡或統一記憶體 | 系統記憶體 | 盤點日期 |
 |---|---|---|---|---|---|---|
 | A | macOS 26.6.2 | Metal | Apple M5（10 核：4P+6E） | **16 GB 統一記憶體**（GPU 實際可用約 10–11 GB） | 同左（統一） | 2026-09-19 |
-| B | Windows | CUDA | GTX 1050 Ti（Pascal, 無 Tensor Core） | **4 GB** | TODO | 2026-09-19 |
+| B | Windows | CUDA | GTX 1650（Turing TU117, 無 Tensor Core） | **4 GB** | TODO | 2026-09-19 |
 | C | Windows | CUDA | GTX 1650（Turing TU117, 無 Tensor Core） | **4 GB** | TODO | 2026-09-19 |
-| D | Windows | CUDA | GTX 1650（Turing TU117, 無 Tensor Core） | **4 GB** | TODO | 2026-09-19 |
+| D | Windows | CUDA | GTX 1050 Ti（Pascal, 無 Tensor Core） | **4 GB** | TODO | 2026-09-19 |
 | E | Windows | CUDA | RTX 5070 Ti（Blackwell） | **16 GB** | TODO | 2026-09-19 |
 
 > [!CAUTION]
