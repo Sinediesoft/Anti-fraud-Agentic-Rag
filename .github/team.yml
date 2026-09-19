@@ -26,7 +26,7 @@ members:
     github: shin5shin
     name: shin5shin
     os: Windows
-    gpu: GTX 1050 Ti / 4GB
+    gpu: GTX 1650 / 4GB
     module_dir: packages/modules/b_tbd
     platform: TODO-平台
     tactic: TODO-詐騙手法
@@ -44,7 +44,7 @@ members:
     github: door410
     name: door410
     os: Windows
-    gpu: GTX 1650 / 4GB
+    gpu: GTX 1050 Ti / 4GB
     module_dir: packages/modules/d_tbd
     platform: TODO-平台
     tactic: TODO-詐騙手法
