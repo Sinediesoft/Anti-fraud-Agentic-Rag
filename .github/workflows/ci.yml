@@ -58,6 +58,15 @@ jobs:
             --author "${{ github.event.pull_request.user.login }}" \
             --changed-files /tmp/changed.txt 2>&1 | tee detail/ownership.txt
 
+      # 檢查五：印到 stdout 的字，繁中 Windows(cp950) 編得出來嗎（Issue #7）
+      # 模組 A 在 macOS 開發，作者本機永遠重現不了；四台 Windows 全部會踩到。
+      - name: 跨平台輸出檢查
+        if: always()
+        run: |
+          mkdir -p detail
+          set -o pipefail
+          uv run python tools/check_cp950_stdout.py 2>&1 | tee detail/cp950.txt
+
       - name: 保存輸出給 PR 機器人
         if: always()
         uses: actions/upload-artifact@v4

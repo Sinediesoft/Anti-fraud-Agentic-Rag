@@ -29,3 +29,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+      # Issue #7 那類問題的執法者：印到 stdout 的字，繁中 Windows 編得出來嗎。
+      # 在這裡擋比在 CI 擋更有價值 —— 寫的人當場就知道，不必等 PR 紅燈。
+      # 而且模組 A 在 macOS 開發，作者本機永遠重現不了，只有這道關卡看得見。
+      - id: cp950-stdout-check
+        name: 跨平台輸出檢查
+        entry: uv run python tools/check_cp950_stdout.py
+        language: system
+        types: [python]
