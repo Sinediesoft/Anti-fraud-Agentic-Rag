@@ -59,7 +59,17 @@ def load_local() -> list[Case]:
     if not LOCAL_CORPUS.exists():
         return []
     cases: list[Case] = []
-    for line in LOCAL_CORPUS.read_text(encoding="utf-8").splitlines():
+    # 🔴 一定要用 split("\n")，不能用 splitlines()。
+    #
+    # json.dumps(ensure_ascii=False) 只跳脫 \n \r \t " \\ 與 0x20 以下的控制字元，
+    # **不跳脫** U+2028 LINE SEPARATOR、U+2029 PARAGRAPH SEPARATOR、U+0085 NEL。
+    # 但 str.splitlines() 會在這三個上面斷行 —— 於是一筆合法的 JSONL 被切成兩半，
+    # 讀回來就是 JSONDecodeError: Unterminated string。
+    #
+    # 這不是假設：2026-09-20 用 165 的 10,051 筆真實語料實測，裡面有 2 個 U+2028，
+    # splitlines() 數出 10,053 行而 split("\n") 數出 10,052 行。受害者的自由敘述
+    # 什麼字元都有，用自己造的測試資料永遠碰不到這個。
+    for line in LOCAL_CORPUS.read_text(encoding="utf-8").split("\n"):
         if not line.strip():
             continue
         raw = json.loads(line)
@@ -105,9 +115,27 @@ def read_shared(path: Path | None = None) -> list[dict]:
     return pq.read_table(src).to_pylist()
 
 
-def _matches_label(label: str, labels: list[str]) -> bool:
-    """標籤比對。165 的 CaseTitle 是官方分類，可信度比內文推斷高很多。"""
+def _matches_label(label: str, labels: list[str], excludes: list[str] | None = None) -> bool:
+    """標籤比對。
+
+    🔴 165 的 label 欄（上游的 CaseTitle）**不是受控分類**，實測 194,355 筆裡
+       有 1,003 種值，混了三種東西：
+
+         · 官方分類          假投資詐騙 27,718 筆、假投資 2,509 筆
+         · 空白與換行變體    '假投資詐騙 '、'\\n\\n假投資詐騙'、' \\n \\t\\n假投資詐騙'
+         · 受害者自己寫的標題「投資夢，成詐騙」「慈惠APP的謊言：⋯百萬騙局」
+
+       所以用子字串比對而不是等值比對 —— 前兩種靠它自然吃得下，第三種只能放棄
+       （那些是自由文字，沒有規則抓得完）。
+
+    excludes 是必要的，因為子字串會咬到別人的手法：`假交友(投資詐財)詐騙`
+    有 13,945 筆，是投資詐財沒錯，但走的是交友路徑，屬於別人的組合。
+    實測加了 `交友` 排除後，命中從 46,554 掉回 30,824 —— 那 15,730 筆本來
+    就不該是我的。
+    """
     low = label.lower()
+    if excludes and any(t and t.lower() in low for t in excludes):
+        return False
     return any(t and t.lower() in low for t in labels)
 
 
@@ -126,6 +154,7 @@ def build_subset(
     labels: list[str],
     platform_terms: list[str],
     *,
+    label_excludes: list[str] | None = None,
     source_path: Path | None = None,
     out_path: Path | None = None,
     platform_only: bool = True,
@@ -152,7 +181,7 @@ def build_subset(
         text = _norm(r.get("text"))
         if len(text) < MIN_CHARS:
             continue
-        if not _matches_label(_norm(r.get("label")), labels):
+        if not _matches_label(_norm(r.get("label")), labels, label_excludes):
             continue
         by_label.append(r)
 
@@ -267,14 +296,19 @@ def _main() -> None:
     pack = yaml.safe_load((MODULE_DIR / "pack.yaml").read_text(encoding="utf-8"))
     labels = list(pack.get("labels_canon") or []) + list(pack.get("label_aliases") or [])
     platform_terms = list(pack.get("platform_terms") or [])
+    # 標籤排除沿用 negative_terms，不另開欄位 —— PackSpec 設了 extra="forbid"，
+    # 而它在凍結的 packages/contracts/ 裡。語意本來就對得上。
+    excludes = list(pack.get("negative_terms") or [])
 
     print(f"手法標籤：{'、'.join(labels)}")
+    print(f"排除    ：{'、'.join(excludes) or '（無）'}")
     print(f"平台詞  ：{'、'.join(platform_terms)}")
     print()
 
     got = build_subset(
         labels,
         platform_terms,
+        label_excludes=excludes,
         source_path=args.corpus,
         out_path=args.out,
         platform_only=not args.tactic_only,
@@ -299,14 +333,19 @@ def _main() -> None:
     cases = load_local() if args.out is None else []
     if cases:
         print("\n分類覆蓋率：")
+        gaps = False
         for key, (used, unused) in coverage(cases).items():
             print(f"  {key:<9} 用到 {len(used):>2} 個：{'、'.join(used) or '（無）'}")
             if unused:
+                gaps = True
                 print(f"  {'':<9} [!] 詞彙表有但語料沒有：{'、'.join(unused)}")
-        print(
-            "  [!] 那幾個「有詞彙表沒語料」的值，使用者問得出條件但會篩到 0 筆 ——\n"
-            "      那比抽不出條件更糟，因為它會保證回答「沒有」。"
-        )
+        if gaps:
+            print(
+                "  [!] 那幾個「有詞彙表沒語料」的值，使用者問得出條件但會篩到 0 筆 ——\n"
+                "      那比抽不出條件更糟，因為它會保證回答「沒有」。"
+            )
+        else:
+            print("  [OK] 四個維度都有語料，不會出現「問得出條件卻篩到 0 筆」的情況。")
 
 
 if __name__ == "__main__":

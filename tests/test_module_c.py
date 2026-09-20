@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from contracts import AnalyzeInput, Verdict
 
@@ -356,14 +358,104 @@ def test_找不到共用語料時的訊息要說得出去哪裡拿(tmp_path):
         build_subset(LABELS, PLATFORM, source_path=tmp_path / "不存在.parquet")
 
 
+def test_標籤排除擋得掉別人的複合手法(tmp_path):
+    """「假交友(投資詐財)詐騙」有 13,945 筆，是投資詐財但走交友路徑，屬於別人的。
+
+    子字串比對咬得到它（經由「投資詐財」），所以 pack.yaml 要明寫 label_excludes。
+    實測：沒有這條時手法命中 46,554，有了之後掉回 30,824。
+    """
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+    rows = [
+        # 兩筆都要超過 MIN_CHARS，否則會先被長度濾掉，測不到標籤排除
+        (
+            "1",
+            "於臉書社團看到投資廣告，加入群組由老師帶單，入金後平台無法出金，損失慘重。",
+            "假投資詐騙",
+        ),
+        (
+            "2",
+            "在臉書認識的對象推薦投資平台，培養感情後誘使入金，加碼後才發現無法提領。",
+            "假交友(投資詐財)詐騙",
+        ),
+    ]
+    path = tmp_path / "c.parquet"
+    pq.write_table(
+        pa.table(
+            {
+                "case_id": [r[0] for r in rows],
+                "text": [r[1] for r in rows],
+                "label": [r[2] for r in rows],
+                "date": ["2026-01-01"] * 2,
+                "county": ["臺北市"] * 2,
+                "county_id": ["63"] * 2,
+                "source": ["165"] * 2,
+            }
+        ),
+        path,
+        compression="zstd",
+    )
+
+    both = build_subset(
+        ["假投資", "投資詐財"], PLATFORM, source_path=path, out_path=tmp_path / "a.jsonl"
+    )
+    assert both["written"] == 2  # 沒排除時兩筆都收
+
+    only_mine = build_subset(
+        ["假投資", "投資詐財"],
+        PLATFORM,
+        label_excludes=["交友"],
+        source_path=path,
+        out_path=tmp_path / "b.jsonl",
+    )
+    assert only_mine["written"] == 1
+
+
+def test_讀得回帶有U2028的語料(tmp_path, monkeypatch):
+    """回歸測試：165 的真實敘述裡有 U+2028 LINE SEPARATOR。
+
+    json.dumps(ensure_ascii=False) **不跳脫** U+2028／U+2029／U+0085，
+    但 str.splitlines() 會在它們上面斷行 —— 一筆合法的 JSONL 被切成兩半，
+    讀回來就是 JSONDecodeError: Unterminated string。
+
+    2026-09-20 用 10,051 筆真實語料才踩到（裡面有 2 個 U+2028）。
+    自己造的測試資料永遠碰不到，所以這條要明寫。
+    """
+    import packages.modules.c_tbd.m1_corpus as m1
+
+    path = tmp_path / "cases.jsonl"
+    monkeypatch.setattr(m1, "LOCAL_CORPUS", path)
+    path.write_text(
+        json.dumps(
+            {
+                "case_id": "X-1",
+                "text": f"前半段{chr(0x2028)}後半段，中間那個是 LINE SEPARATOR。",
+                "source": "165",
+                "label": "假投資詐騙",
+                "date": "",
+                "county": "",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    got = m1.load_local()
+    assert len(got) == 1
+    assert chr(0x2028) in got[0].text
+
+
 def test_覆蓋率報得出詞彙表有但語料沒有的值():
     """這比「抽不出條件」更糟：使用者問得出條件、然後篩到 0 筆，
     而系統會保證回答「沒有」。
 
-    target 這一維在 165 語料上實測是 0 —— 受害者的第一人稱敘述幾乎不會
-    自稱「投資人」「長者」。這是真實缺口，不是測試資料造出來的。
+    ⚠ 這裡驗的是 coverage() 這個函式**算得對**，不是 165 語料真的有缺口。
+      這三筆是合成資料，target 當然是空的。真實語料（10,051 筆）實測
+      四個維度全部用滿 —— 合成資料量不出覆蓋率，別把這個測試的結果
+      當成對 165 的結論。
     """
     cov = coverage(_cases())
     used, unused = cov["target"]
-    assert used == []
-    assert unused  # 詞彙表列了十個，一個都沒用到
+    assert used == []  # 三筆合成資料沒有人自稱「投資人」
+    assert unused  # 所以詞彙表那十個全部列為未使用
