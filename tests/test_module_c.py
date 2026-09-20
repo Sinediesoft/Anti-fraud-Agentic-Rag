@@ -16,6 +16,7 @@ import json
 
 import pytest
 from contracts import AnalyzeInput, Verdict
+from shared import models
 
 from app.registry import load
 from packages.modules.c_tbd import facets
@@ -196,6 +197,27 @@ def test_換了模型就不讀舊快取(tmp_path):
     assert NumpyStore("模型甲", dim=3, path=path).load() is True
     assert NumpyStore("模型乙", dim=3, path=path).load() is False  # 換模型
     assert NumpyStore("模型甲", dim=8, path=path).load() is False  # 換維度
+
+
+def test_檢索器的快取鍵來自鎖定表而不是空字串(tmp_path):
+    """上面那條測試證明「鍵不一樣就不讀舊快取」，但那是自己傳的鍵。
+
+    Retriever 實際用的鍵原本寫死成 ""，於是任何索引檔的 meta 都是 ""、
+    跟任何模型都對得上 —— 上面那個保護在真正的路徑上等於沒有作用。
+    這條守住它真的接到 MODEL_LOCK：#33 之後 revision 一動，快取就該失效。
+    """
+    lock = models.MODEL_LOCK["embedding"]
+    assert Retriever.embed_model, "空字串會讓換模型時安靜沿用舊向量"
+    assert lock.name in Retriever.embed_model
+    assert lock.revision in Retriever.embed_model
+
+    # 拿真正的鍵存一份，再假裝上游把 revision 往前挪 —— 必須讀不回來
+    path = tmp_path / "vectors.npz"
+    real = NumpyStore(Retriever.embed_model, dim=3, path=path)
+    real.add(_cases()[:1], [[1.0, 0.0, 0.0]])
+    real.save()
+    assert NumpyStore(Retriever.embed_model, dim=3, path=path).load() is True
+    assert NumpyStore(f"{lock.name}@別的版本", dim=3, path=path).load() is False
 
 
 def test_刪得掉某個來源的案例():

@@ -185,8 +185,17 @@ class Retriever:
     所以同一個 process 裡可以同時存在好幾個，測試也能各建各的、互不污染。
     """
 
-    embed_model = ""  # S3 鎖定後填 MODEL_LOCK["embedding"] 的 name + revision
-    dim = 1024  # bge-m3 是 1024；換模型要跟著改，store.load() 會擋下不一致
+    # 🔴 這一行不能寫死字串，要從 MODEL_LOCK 取。
+    #
+    # 它的用途是 NumpyStore 的快取鍵：換了模型或換了版本，磁碟上那份索引就
+    # 必須整個重算，因為不同模型的向量空間不相通 —— 混著算出來的相似度是
+    # 沒有意義的數字，而且不會報錯。
+    #
+    # 原本這裡是空字串，那讓整個比對形同虛設：任何索引檔的 meta 都會是 ""，
+    # 跟任何模型都「對得上」，於是換模型之後會安靜地沿用舊向量。
+    # 從鎖定表取就不會有這個問題 —— #33 之後 revision 一變，快取自動失效。
+    embed_model = f"{models.MODEL_LOCK['embedding'].name}@{models.MODEL_LOCK['embedding'].revision}"
+    dim = 1024  # bge-m3 是 1024；換模型要跟著改，store.add() 會擋下不一致
 
     def __init__(
         self,
