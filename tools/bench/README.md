@@ -18,13 +18,14 @@ uv run --no-project --python 3.11 --with torch --with transformers --with senten
 
 `--no-project` 是關鍵：它讓 uv 建立一次性環境，不碰 `.venv`、不改 `uv.lock`。
 
-## 三支腳本
+## 四支腳本
 
 | 腳本 | 量什麼 | 需要什麼 |
 |---|---|---|
 | `embed_latency.py` | 嵌入模型：查詢編碼延遲、建索引吞吐 | torch + transformers |
 | `rerank_latency.py` | 重排序模型：重排 10/20/50 筆的耗時 | torch + transformers |
 | `slm_latency.py` | 地端 SLM：TTFT、生成速度、**上下文天花板** | Ollama 已啟動 |
+| `slm_truncation.py` | **上下文不足時會安靜截斷**：真實 S13 prompt 多大、截斷點在哪 | Ollama 已啟動 |
 
 前兩支會下載模型到 HuggingFace 快取（bge-m3 約 2.3 GB、
 bge-reranker-v2-m3 約 2.2 GB、text2vec-base-chinese 約 0.4 GB）。

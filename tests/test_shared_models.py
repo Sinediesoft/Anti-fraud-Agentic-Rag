@@ -42,6 +42,12 @@ def test_溫度鎖死():
     assert models.TEMPERATURE == 0.0
 
 
+def test_上下文長度鎖死():
+    # 不同的 num_ctx 會在不同的點被截斷，輸出就不能互比。
+    # 8192 是實測出來的：4 GB 卡上仍 100% GPU（+150 MiB），16384 就溢出到 CPU。
+    assert models.NUM_CTX == 8192
+
+
 def test_模型版本表有四個用途():
     assert set(models.MODEL_LOCK) == {"slm", "embedding", "reranker", "cloud"}
     assert models.all_locked() is False  # S3 還沒做
