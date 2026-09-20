@@ -4,7 +4,7 @@
 模型名稱跟隨性程度等參數寫死在這裡，外面改不了 —— 五個人必須用同一組模型，
 否則分數不能比。
 
-S3 進行中：地端 SLM 已鎖定（見 MODEL_LOCK），嵌入／重排序／雲端仍是 TODO。
+S3 進行中：地端 SLM 與嵌入模型已鎖定（見 MODEL_LOCK），重排序／雲端仍是 TODO。
 未鎖定的那幾個被呼叫時會丟 ModelNotSelectedError，而不是偷偷換一個模型跑掉。
 模組要為這件事寫退路 —— 這正是 S13 要求的三層退路裡的第三層。
 """
@@ -53,9 +53,25 @@ MODEL_LOCK: dict[str, ModelLock] = {
     # revision 填 Ollama 的 digest 不是標籤 —— 標籤會被上游重新指向，digest 不會。
     # B(GTX1650/4G)、C(GTX1650/4G)、E(5070Ti/16G)、A(M5/Metal) 四台實測一致。
     "slm": ModelLock("slm", "qwen2.5:3b", "357c53fb659c", "Q4_K_M", "2026-09-20"),
-    # 嵌入模型：候選 bge-m3 / multilingual-e5-large / text2vec-base-chinese
-    # 鎖定後不能換 —— 五個人各建各的向量庫，但嵌入模型必須相同
-    "embedding": ModelLock("embedding", "TODO-S3", "", "", ""),
+    # 嵌入模型：2026-09-20 鎖定。C 實測兩個候選都過得了 S12 的 1 秒門檻，
+    # 選 bge-m3 是因為延遲付得起就該把預算花在品質上 —— 它 p50 只吃掉 13%
+    # 預算（p95 20%），剩下的留給檢索與生成仍然寬裕，而且支援繁中。
+    # revision 填 HuggingFace 的 commit SHA，不是分支名 —— 理由同 slm。
+    # dtype 跟著本專案的跨平台決議走 fp32：MPS 與 CUDA 的低位數值差異會讓
+    # 五個人的分數不能互比，這比那點速度重要。
+    #
+    # ⚠ 代價：建索引 3000 筆要 43 分鐘（text2vec 只要 19 分鐘），而且五個人
+    #   各建各的。所以切塊策略要先定案再建正式索引，不要邊建邊改。
+    # 退路 text2vec-base-chinese（102M，p95 45ms，只吃 4% 預算）：
+    #   sha 183bb99aa7af74355fb58d16edf8c13ae7c5433e
+    #   真的要換的代價是五個人的向量庫全部重建 —— 鎖定後不能換講的就是這件事。
+    "embedding": ModelLock(
+        "embedding",
+        "BAAI/bge-m3",
+        "5617a9f61b028005a4858fdac845db406aefb181",
+        "fp32",
+        "2026-09-20",
+    ),
     # 重排序模型：說明書建議 bge-reranker-v2-m3
     "reranker": ModelLock("reranker", "TODO-S3", "", "", ""),
     # 雲端模型：選一家、一個型號、一個版本
