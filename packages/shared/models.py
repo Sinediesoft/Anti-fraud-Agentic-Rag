@@ -4,8 +4,8 @@
 模型名稱跟隨性程度等參數寫死在這裡，外面改不了 —— 五個人必須用同一組模型，
 否則分數不能比。
 
-S3 還沒跑完（模型尚未鎖定），所以 MODEL_LOCK 裡都是 TODO。
-在鎖定之前呼叫會丟 ModelNotSelectedError，而不是偷偷換一個模型跑掉。
+S3 進行中：地端 SLM 已鎖定（見 MODEL_LOCK），嵌入／重排序／雲端仍是 TODO。
+未鎖定的那幾個被呼叫時會丟 ModelNotSelectedError，而不是偷偷換一個模型跑掉。
 模組要為這件事寫退路 —— 這正是 S13 要求的三層退路裡的第三層。
 """
 
@@ -48,8 +48,11 @@ class ModelLock:
 
 # TODO(S3)：五人決議後填滿這張表，並同步更新 docs/model-lock.md
 MODEL_LOCK: dict[str, ModelLock] = {
-    # 地端小模型：候選 Qwen2.5-7B / Llama-3.2-3B / TAIDE-LX-7B，依最低配那台的顯卡記憶體選
-    "slm": ModelLock("slm", "TODO-S3", "", "", ""),
+    # 地端小模型：2026-09-20 鎖定。說明書清單內唯一合 4 GB 天花板的是 Llama-3.2-3B，
+    # 但它官方不支援中文，所以偏離一格用同家族的 Qwen2.5-3B（這個偏離要寫進報告）。
+    # revision 填 Ollama 的 digest 不是標籤 —— 標籤會被上游重新指向，digest 不會。
+    # B(GTX1650/4G)、C(GTX1650/4G)、E(5070Ti/16G)、A(M5/Metal) 四台實測一致。
+    "slm": ModelLock("slm", "qwen2.5:3b", "357c53fb659c", "Q4_K_M", "2026-09-20"),
     # 嵌入模型：候選 bge-m3 / multilingual-e5-large / text2vec-base-chinese
     # 鎖定後不能換 —— 五個人各建各的向量庫，但嵌入模型必須相同
     "embedding": ModelLock("embedding", "TODO-S3", "", "", ""),
@@ -64,6 +67,11 @@ TEMPERATURE = 0.0
 TOP_P = 1.0
 MAX_TOKENS = 1024
 SEED = 20260918
+
+# 上下文長度也要鎖。Ollama 的預設是 4096，放不下 S13 的示範題；
+# 但跨過 8192 之後 4 GB 卡會把部分層丟回 CPU —— 而且不報錯，只是無聲掉速三成。
+# 呼叫 SLM 時一定要明確帶上，不要靠預設值。（C 與 E 兩台獨立實測都指向這個數字）
+NUM_CTX = 8192
 
 
 def _require(purpose: str) -> ModelLock:
