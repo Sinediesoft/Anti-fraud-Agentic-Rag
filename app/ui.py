@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 # streamlit run 是把這個檔案當腳本執行，所以 __package__ 是空的、相對匯入會失效。
@@ -22,6 +23,7 @@ for _p in (_ROOT, _ROOT / "packages"):
 
 import streamlit as st  # noqa: E402
 from contracts import AnalyzeInput, CoverageStatus, ImageInput, RiskLevel  # noqa: E402
+from shared import models  # noqa: E402
 
 from app.shell import Shell  # noqa: E402
 
@@ -34,6 +36,42 @@ RISK_STYLE: dict[RiskLevel, tuple[str, str]] = {
 }
 
 
+# 執行紀錄是攤平的巢狀結構（見 app/shell.py）：
+#
+#     route:<模組>…  →  analyze:<模組>  →  模組自己的子步驟…  →  guards
+#                        └ 父層，整個 analyze() 的牆鐘時間 ┘
+#
+# 全部相加等於把模組那段算兩次。2026-09-21 實測：父層 7141 ms 被加成 14281 ms，
+# 畫面上的「總耗時」剛好是實際的兩倍。所以只加外殼自己那幾筆 —— 父層已經
+# 涵蓋所有子步驟了。這幾個名字全部由 app/shell.py 產生，不是模組取的。
+SHELL_STEPS = ("route:", "entitlement", "analyze:", "guards")
+
+
+@st.cache_resource(show_spinner=False)
+def _warm_up_embedder() -> bool:
+    """開機時就把嵌入模型載進記憶體，不要等使用者按下按鈕才開始載。
+
+    bge-m3 是 2.2GB。2026-09-21 實測第一次 embed() 要 3.5 秒（機器閒著）到
+    6.7 秒（有背景工作在搶 CPU），而那段時間現在全部算在第一次查詢的
+    「m3:檢索相似案例」上 —— 檢索本身其實不到 15 ms。
+
+    丟到背景執行緒而不是同步載：畫面先畫出來，模型在使用者打字的時候載完。
+    同步載只是把等待從查詢搬到開機，沒有省到任何人的時間。
+
+    失敗不處理：沒裝 ml 那組套件的人本來就會落到檢索的第三層退路（字元重疊），
+    預熱失敗不該讓整個畫面爆掉。st.cache_resource 保證每個 process 只跑一次。
+    """
+
+    def _load() -> None:
+        try:
+            models.embed(["暖機"])
+        except Exception:
+            pass
+
+    threading.Thread(target=_load, daemon=True, name="embed-warmup").start()
+    return True
+
+
 def _selection() -> str:
     parser = argparse.ArgumentParser()
     parser.add_argument("--module", default="all")
@@ -43,6 +81,7 @@ def _selection() -> str:
 
 def main() -> None:
     st.set_page_config(page_title="防詐 Copilot", page_icon="🛡️", layout="wide")
+    _warm_up_embedder()
     selection = _selection()
 
     st.title("🛡️ 防詐 Copilot")
@@ -154,7 +193,7 @@ def main() -> None:
     with right:
         st.subheader("③ 執行紀錄")
         st.caption("這次判讀呼叫了哪些步驟、各花多久。")
-        total = sum(e.duration_ms for e in response.trace)
+        total = sum(e.duration_ms for e in response.trace if e.step.startswith(SHELL_STEPS))
         st.metric("總耗時", f"{total:.0f} ms")
         for event in response.trace:
             mark = {"ok": "✅", "degraded": "🟡", "failed": "❌", "skipped": "⏭️"}.get(

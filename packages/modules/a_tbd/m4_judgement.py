@@ -39,6 +39,11 @@ _PAYMENT_TERMS = {
 
 _DAYS = re.compile(r"(\d{1,3})\s*(?:天|日)")
 
+# S13 把 prompt、12 則示範題與 grammar 約束寫好之後改成 True。
+# 在那之前不呼叫模型 —— 送一個空 prompt 過去再把回覆丟掉，只會浪費時間
+# 並讓 confidence 說謊。模組 C 在 c60b03c 用同一個旗標處理了同一段程式碼。
+_SLM_PROMPT_READY = False
+
 
 def keyword_score(text: str, positive: list[str], negative: list[str]) -> float:
     """最笨的分類法，當及格線（baseline）。S13 要求比它相對進步 10% 以上。
@@ -120,20 +125,37 @@ def judge(
     notes: list[str] = []
     confidence = Confidence.MEDIUM
 
-    # 第一層 + 第二層：讓地端小模型照格式吐。模型未鎖定時直接落到第三層。
-    for attempt in range(2):
-        try:
-            # TODO(S13)：把 prompt、few-shot 12 則、grammar 約束寫在這裡
-            models.call_slm("", grammar=None)
-            break
-        except models.ModelNotSelectedError as exc:
-            if attempt == 1:
-                notes.append(f"退到規則抽取：{exc}")
-                confidence = Confidence.LOW
-        except Exception as exc:  # 模型吐出來的東西不合格式
-            if attempt == 1:
-                notes.append(f"模型輸出不合格式，退到規則抽取：{exc}")
-                confidence = Confidence.LOW
+    # 第一層 + 第二層：讓地端小模型照格式吐。模型不可用時落到第三層。
+    #
+    # 🔴 這裡原本是：
+    #
+    #       models.call_slm("", grammar=None)   # 送空字串、回傳值丟掉
+    #       break
+    #
+    #   call_slm() 還會 raise 的年代這沒差。它在 2026-09-20 接上 Ollama 之後
+    #   有兩個問題：每次判讀白等一次 Ollama 冷載入（2026-09-21 實測 788 ms，
+    #   UI 的執行紀錄上量到 1546 ms），而模型收到空字串也只會回空字串；
+    #   更糟的是「沒拋例外」就 break，confidence 停在 MEDIUM —— 但 profile
+    #   其實是下面那三行規則硬抽的，等於對使用者謊報信心。
+    #
+    #   所以 prompt 真的寫出來之前不呼叫模型，並誠實標記信心低。
+    #   S13 補 prompt 時把 _SLM_PROMPT_READY 打開，兩層重試就會接上。
+    if _SLM_PROMPT_READY:
+        for attempt in range(2):
+            try:
+                # TODO(S13)：把 prompt、few-shot 12 則、grammar 約束寫在這裡
+                raise NotImplementedError("S13 的 prompt 還沒寫")
+            except (models.ModelNotSelectedError, models.ModelDependencyError) as exc:
+                if attempt == 1:
+                    notes.append(f"退到規則抽取：{exc}")
+                    confidence = Confidence.LOW
+            except Exception as exc:  # 模型吐出來的東西不合格式
+                if attempt == 1:
+                    notes.append(f"模型輸出不合格式，退到規則抽取：{exc}")
+                    confidence = Confidence.LOW
+    else:
+        notes.append("S13 的 prompt 尚未寫，直接用規則抽取")
+        confidence = Confidence.LOW
 
     score = keyword_score(text, positive, negative)
     stage_id = detect_stage(text, stages)

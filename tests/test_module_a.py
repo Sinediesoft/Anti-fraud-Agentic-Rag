@@ -54,6 +54,30 @@ def test_沒有模型也跑得完一次判讀(monkeypatch):
     assert verdict.confidence.value == "low"
 
 
+def test_prompt沒寫好時根本不呼叫模型(monkeypatch):
+    """S13 的 prompt 還沒寫，那就不該去打擾模型。
+
+    這條守的是 2026-09-21 量到的那個浪費：M4 原本送一個空字串給 Ollama，
+    模型回空字串，但每次判讀要多等一次冷載入（實測 788 ms，UI 上 1546 ms）。
+    呼叫次數直接數 —— 「有沒有變慢」測不出來，「有沒有呼叫」測得出來。
+    """
+    called = []
+    monkeypatch.setattr(models, "call_slm", lambda *a, **k: called.append(a) or "")
+    _module().analyze(AnalyzeInput(text="群組裡的老師叫我先入金才能出金"))
+    assert called == []
+
+
+def test_走規則抽取時信心一定標低():
+    """空 prompt 那版的第二個問題：呼叫沒拋例外就 break，confidence 留在
+    MEDIUM —— 但 profile 是規則硬抽的。信心值對使用者說謊比慢更嚴重。
+
+    這裡刻意不 monkeypatch 任何東西：Ollama 有沒有在跑都該是 low，因為
+    現在根本沒有走模型那條路。
+    """
+    verdict = _module().analyze(AnalyzeInput(text="我已經匯了三萬元出去"))
+    assert verdict.confidence.value == "low"
+
+
 def test_判讀過程一定先經過去識別化():
     verdict = _module().analyze(AnalyzeInput(text="我手機0912345678，匯了五萬"))
     steps = [e.step for e in verdict.trace]
