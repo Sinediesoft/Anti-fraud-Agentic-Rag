@@ -38,3 +38,12 @@ repos:
         entry: uv run python tools/check_cp950_stdout.py
         language: system
         types: [python]
+
+      # 文件的鎖定表與程式的 MODEL_LOCK 必須一致。兩邊不一致不會噴錯，
+      # 只會讓五個人的分數不能互比 —— 而那通常要到合併週才發現。
+      - id: model-lock-sync
+        name: 模型鎖定同步檢查
+        entry: uv run python tools/check_model_lock_sync.py
+        language: system
+        pass_filenames: false
+        files: '^(docs/model-lock\.md|packages/shared/models\.py)$'

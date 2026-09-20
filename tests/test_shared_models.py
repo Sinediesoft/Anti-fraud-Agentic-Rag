@@ -48,6 +48,14 @@ def test_上下文長度鎖死():
     assert models.NUM_CTX == 8192
 
 
+def test_其餘取樣參數也鎖死():
+    # 這三個原本沒有測試守著，改了不會有任何紅燈。
+    # seed 尤其重要 —— 它跟 temperature 是同一個目的：五個人要一樣的結果。
+    assert models.TOP_P == 1.0
+    assert models.MAX_TOKENS == 1024
+    assert models.SEED == 20260918
+
+
 def test_模型版本表有四個用途():
     assert set(models.MODEL_LOCK) == {"slm", "embedding", "reranker", "cloud"}
     assert models.all_locked() is False  # S3 還沒做

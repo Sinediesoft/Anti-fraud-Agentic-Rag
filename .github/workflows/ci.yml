@@ -67,6 +67,15 @@ jobs:
           set -o pipefail
           uv run python tools/check_cp950_stdout.py 2>&1 | tee detail/cp950.txt
 
+      # 檢查六：文件的鎖定表與程式的 MODEL_LOCK 有沒有走散。
+      # model-lock.md 自己就寫著「兩邊不一致會讓分數對不起來」，但在這之前沒人檢查。
+      - name: 模型鎖定同步檢查
+        if: always()
+        run: |
+          mkdir -p detail
+          set -o pipefail
+          uv run python tools/check_model_lock_sync.py 2>&1 | tee detail/modellock.txt
+
       - name: 保存輸出給 PR 機器人
         if: always()
         uses: actions/upload-artifact@v4
