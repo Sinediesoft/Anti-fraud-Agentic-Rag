@@ -48,9 +48,13 @@ INDEX_PATH = INDEX_DIR / "vectors.npz"
 # 不是「靜默地撈不到」。S12 要用 tools/bench/ 的方式量出真值再填回來。
 DEFAULT_MIN_SCORE = 0.0
 
-# 嵌入模型鎖定後改成 True，第 1 層退路就會接上。
-# 現在 shared.models.embed() 會丟 ModelNotSelectedError，所以預設關著。
-MODEL_READY = False
+# 第 1 層退路開不開。不是手動翻的布林值 —— 問鎖定表就好，
+# 那樣 MODEL_LOCK 一動這裡就跟著動，不必有人記得回來改這一行。
+#
+# 注意這裡**只問「鎖了沒」，不問「這台裝了套件沒」**。沒裝 ml 那組的人
+# 仍然會走進第 1 層，然後被 ModelDependencyError 擋下來退到第 3 層 ——
+# 那是刻意的：退路要能被觀察到有啟動，靜悄悄地不走第 1 層反而看不出來。
+MODEL_READY = models.MODEL_LOCK["embedding"].is_locked
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -361,7 +365,15 @@ def search(query: str, *, top_k: int = 5, cases: list[Case] | None = None) -> li
     """檢索相似案例。回傳的每一筆都帶案例編號，節錄一律先去識別化。
 
     這是外殼與 M4／M5 唯一該呼叫的入口。三層退路在這裡收斂：
-    向量檢索失敗（模型未鎖定）就自動落到關鍵字，不讓使用者看到例外。
+    向量檢索失敗就自動落到關鍵字，不讓使用者看到例外。
+
+    「失敗」有兩種，兩種都要接住：
+
+      · ModelNotSelectedError   五個人還沒決議（現在嵌入已經鎖了，所以不會）
+      · ModelDependencyError    這台沒裝 ml 那組套件（現在最常見的就是這個）
+
+    漏接第二種的後果是：沒裝 torch 的組員一查詢就看到例外，而不是安靜地
+    用關鍵字檢索 —— 而那正是三層退路存在的意義。
     """
     pool = cases if cases is not None else load_local()
     if not pool:
@@ -371,8 +383,11 @@ def search(query: str, *, top_k: int = 5, cases: list[Case] | None = None) -> li
     if MODEL_READY:
         try:
             hits = Retriever(cases=pool, store_path=INDEX_PATH).retrieve(query, k=top_k)
-        except models.ModelNotSelectedError:
+        except (models.ModelNotSelectedError, models.ModelDependencyError):
             hits = []  # 落到第 3 層。這是預期內的狀態，不是錯誤
+        except FileNotFoundError:
+            # 索引還沒建（make index MODULE=c_tbd 還沒跑過）。也是預期內的。
+            hits = []
     if not hits:
         hits = _keyword_search(query, pool, top_k)
 

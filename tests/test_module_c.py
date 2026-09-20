@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 
 import pytest
@@ -241,17 +242,37 @@ def test_不准刪來源為空的案例():
 # ── 移植：檢索 ──────────────────────────────────────────────────────
 
 
-def test_模型未鎖定時第一層退路要明確報錯而不是靜默():
-    """ModelNotSelectedError 是預期內的狀態，呼叫端要接住並落到第 3 層。"""
-    from shared.models import ModelNotSelectedError
+def test_第一層退路失敗時要明確報錯而不是靜默():
+    """兩種失敗都要是可以被接住的例外，不能是靜悄悄回一個空清單。
 
-    with pytest.raises(ModelNotSelectedError):
-        Retriever(cases=_cases()).embed(["測試"])
+    embedding 已經鎖定（#33），所以現在會走進去真的算 —— 這台沒裝 ml
+    那組套件的話拿到 ModelDependencyError，裝了的話就真的算得出向量。
+    """
+    from shared.models import ModelDependencyError
+
+    if importlib.util.find_spec("torch") is None:
+        with pytest.raises(ModelDependencyError):
+            Retriever(cases=_cases()).embed(["測試"])
+    else:
+        v = Retriever(cases=_cases()).embed(["測試"])
+        assert len(v[0]) == Retriever.dim
 
 
-def test_目前實際跑的是第三層退路():
-    """S3 鎖定嵌入模型之後這條要改。留著是為了讓那次改動被看見。"""
-    assert MODEL_READY is False
+def test_第一層退路已經打開且跟著鎖定表走():
+    """原本這條斷言 MODEL_READY is False，留著就是為了讓打開那一刻被看見。
+
+    現在改成守另一件事：它不能又變回手翻的常數。寫死 True 跟寫死 False
+    一樣糟 —— 模型退回未鎖定時，第 1 層會繼續衝進去然後每次都丟例外。
+    """
+    assert MODEL_READY is models.MODEL_LOCK["embedding"].is_locked
+    assert MODEL_READY is True  # #33 之後的實際狀態
+
+
+def test_沒裝套件的人查詢要退到關鍵字而不是看到例外():
+    """三層退路的意義就在這裡：漏接 ModelDependencyError 的話，沒裝 torch
+    的組員一查詢就炸，而不是安靜地用關鍵字檢索。"""
+    hits = search("我在臉書看到投資廣告", cases=_cases())
+    assert hits  # 不管第 1 層成不成功，都一定要有結果
 
 
 def test_搜尋得到而且每筆都帶得出出處():
