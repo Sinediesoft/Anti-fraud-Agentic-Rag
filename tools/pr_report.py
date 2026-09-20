@@ -193,6 +193,7 @@ def build(results: dict[str, str], detail_dir: Path, author: str = "") -> str:
         boundaries = detail(detail_dir, "boundaries.txt")
         ownership = detail(detail_dir, "ownership.txt")
         cp950 = detail(detail_dir, "cp950.txt")
+        modellock = detail(detail_dir, "modellock.txt")
 
         if "[X]" in boundaries:
             lines += ["### 模組越界 import", "", "```", boundaries, "```", ""]
@@ -227,8 +228,18 @@ def build(results: dict[str, str], detail_dir: Path, author: str = "") -> str:
                 "",
             ]
 
-        # 三個檔都沒有 [X] 卻紅了：job 本身出問題（裝不起來、逾時之類）
-        if "[X]" not in boundaries and "[X]" not in ownership and "[X]" not in cp950:
+        if "[X]" in modellock:
+            lines += ["### 模型鎖定表與程式走散了", "", "```", modellock, "```", ""]
+            lines += [
+                "`docs/model-lock.md` 的鎖定表與 `packages/shared/models.py` 的 "
+                "`MODEL_LOCK` 必須一致。改動任一邊時，另一邊要跟著改。",
+                "",
+                "兩邊不一致**不會噴錯**，只會讓五個人的分數不能互比——而那通常要到合併週才發現。",
+                "",
+            ]
+
+        # 四個檔都沒有 [X] 卻紅了：job 本身出問題（裝不起來、逾時之類）
+        if not any("[X]" in t for t in (boundaries, ownership, cp950, modellock)):
             lines += [
                 "### 越界檢查沒過",
                 "",
