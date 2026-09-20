@@ -7,6 +7,10 @@
 S3 進行中：地端 SLM 與嵌入模型已鎖定（見 MODEL_LOCK），重排序／雲端仍是 TODO。
 未鎖定的那幾個被呼叫時會丟 ModelNotSelectedError，而不是偷偷換一個模型跑掉。
 模組要為這件事寫退路 —— 這正是 S13 要求的三層退路裡的第三層。
+
+鎖定與「接得上」是兩件事：embed() 已經真的接上 bge-m3，call_slm() 與其餘兩個
+還只有鎖定表。所以模組的退路現在仍然必要，只是觸發的原因會從「還沒鎖」
+變成「這台沒裝 ml 那組套件」（ModelDependencyError）。
 """
 
 from __future__ import annotations
@@ -25,6 +29,15 @@ class ModelNotSelectedError(RuntimeError):
 
 class RawTextLeakError(ValueError):
     """有人想把沒遮過的原文送進雲端。這是硬界線，不是警告。"""
+
+
+class ModelDependencyError(RuntimeError):
+    """模型鎖定了、程式也接上了，但這台機器少裝跑它需要的套件。
+
+    跟 ModelNotSelectedError 分開是刻意的：那個的下一步是「五個人去決議」，
+    這個的下一步是「你自己裝 extra」。混成同一種例外會讓人跑去改 MODEL_LOCK，
+    那正好是最不該動的東西。
+    """
 
 
 @dataclass(frozen=True)
@@ -98,6 +111,24 @@ SEED = 20260918
 # 被截斷，輸出就不能互比。截斷的可觀測訊號見 tools/bench/slm_truncation.py。
 NUM_CTX = 8192
 
+# ── 嵌入模型的執行條件 ──────────────────────────────────────────────
+#
+# 這幾個值跟 tools/bench/embed_latency.py 量出 docs/model-lock.md 那組延遲數字
+# 時用的完全一致。改了就不能再拿那些數字當依據。
+#
+# device 與 dtype 是「跨平台決議」釘死的，不是效能取捨：Mac 的 MPS 預設 fp16，
+# 同一個模型算出來的向量跟 CPU fp32 不一樣，而向量不一樣就代表分數不能互比。
+# 寧可慢，也不要五個人的分數各自為政。
+EMBED_DEVICE = "cpu"
+EMBED_DTYPE = "float32"
+EMBED_MAX_TOKENS = 512  # 超過就截斷。bge-m3 撐得住 8192，但實測的是 512
+EMBED_BATCH = 8
+
+# 取池化方式。bge 系列取 CLS，text2vec 系列取 mean —— 取錯速度一樣，但向量
+# 會是垃圾，而且不會報錯。退路 text2vec-base-chinese 真的被換上來時，
+# 這一行要跟著 MODEL_LOCK["embedding"] 一起改。
+EMBED_POOLING = "cls"
+
 
 def _require(purpose: str) -> ModelLock:
     lock = MODEL_LOCK[purpose]
@@ -119,11 +150,88 @@ def call_slm(prompt: str, *, grammar: str | None = None) -> str:
     raise ModelNotSelectedError(f"{lock.name} 的呼叫尚未實作（S3 之後補）")
 
 
+def _import_ml():
+    """torch 與 transformers 走延遲 import。
+
+    跟 m1_corpus 讀 parquet 同一個做法，理由在本專案更強：torch 在 macOS ARM
+    與 Windows CUDA 上是不同的 wheel，列成必裝會讓某些人 uv sync 直接失敗。
+    所以它在 pyproject 的 ml 這組 extra 裡，預設不裝，import 也延遲到真的要
+    算向量的那一刻 —— 沒裝的人照樣 import 得了這個模組，只是走不到第一層。
+    """
+    try:
+        import torch
+        import torch.nn.functional as F
+        from transformers import AutoModel, AutoTokenizer
+    except ImportError as exc:
+        raise ModelDependencyError(
+            "嵌入模型要用 torch 與 transformers，這台沒裝。裝法：uv sync --extra ml "
+            "（torch 的 wheel 依平台而異，見 pyproject.toml 的註解）。"
+            "只是想量延遲、不想動專案環境的話，用 tools/bench/ 的隔離環境跑。"
+        ) from exc
+    return torch, F, AutoModel, AutoTokenizer
+
+
+# 同一個 process 只載一次。實測冷啟動 5.3 秒，每次查詢重載會讓 S12 的 1 秒
+# 門檻直接沒救。鍵帶上 revision：模型換版時快取要跟著失效。
+_EMBEDDER: tuple = ()
+
+
+def _load_embedder(lock: ModelLock):
+    global _EMBEDDER
+    key = f"{lock.name}@{lock.revision}"
+    if _EMBEDDER and _EMBEDDER[0] == key:
+        return _EMBEDDER[1], _EMBEDDER[2]
+
+    torch, _F, AutoModel, AutoTokenizer = _import_ml()
+    # revision 一定要帶 —— 不帶就是跟著上游的 main 跑，那會讓 MODEL_LOCK
+    # 釘住的那個 commit 形同虛設，而且不會有任何徵兆。
+    tok = AutoTokenizer.from_pretrained(lock.name, revision=lock.revision)
+    model = AutoModel.from_pretrained(
+        lock.name, revision=lock.revision, dtype=getattr(torch, EMBED_DTYPE)
+    )
+    model.to(EMBED_DEVICE)
+    model.eval()
+    _EMBEDDER = (key, tok, model)
+    return tok, model
+
+
+def _pool(hidden, mask, F):
+    """把 token 向量收成一條句向量，並正規化成單位長度。"""
+    if EMBED_POOLING == "cls":
+        return F.normalize(hidden[:, 0], p=2, dim=1)
+    m = mask.unsqueeze(-1).expand(hidden.size()).float()
+    return F.normalize((hidden * m).sum(1) / m.sum(1).clamp(min=1e-9), p=2, dim=1)
+
+
 def embed(texts: list[str]) -> list[list[float]]:
-    """把文字變成向量。五個人各建各的向量庫，但都從這裡取向量。"""
+    """把文字變成向量。五個人各建各的向量庫，但都從這裡取向量。
+
+    回傳的向量**已經 L2 正規化**，所以兩條向量的內積就是餘弦相似度，上層可以
+    直接用矩陣乘法算分數。這件事寫在這裡而不是留給呼叫端，是因為忘了正規化
+    不會報錯，只會讓相似度悄悄變成「長度較長的文件比較像」。
+
+    成本提醒（實測）：查詢一句話 p50 127 ms，但建索引是 1.17 筆/秒 ——
+    3000 筆要 43 分鐘，而且五個人各建各的。切塊策略先定案再建正式索引。
+    """
     lock = _require("embedding")
-    # TODO(S3)：接上 sentence-transformers，模型固定用 lock.name + lock.revision
-    raise ModelNotSelectedError(f"{lock.name} 的呼叫尚未實作（S3 之後補）")
+    if not texts:
+        return []
+
+    torch, F, _AutoModel, _AutoTokenizer = _import_ml()
+    tok, model = _load_embedder(lock)
+
+    out: list[list[float]] = []
+    with torch.inference_mode():
+        for i in range(0, len(texts), EMBED_BATCH):
+            enc = tok(
+                texts[i : i + EMBED_BATCH],
+                padding=True,
+                truncation=True,
+                max_length=EMBED_MAX_TOKENS,
+                return_tensors="pt",
+            )
+            out.extend(_pool(model(**enc).last_hidden_state, enc["attention_mask"], F).tolist())
+    return out
 
 
 def rerank(query: str, candidates: list[str]) -> list[float]:
