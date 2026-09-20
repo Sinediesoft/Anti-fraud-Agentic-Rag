@@ -211,12 +211,23 @@ S12 要求**查詢延遲 p95 ≤ 1 秒**，流程是「用重排序模型把前 
 > 這一題**在 B / C / D 上才看得見**。A 的 M5 與 E 的 5070 Ti 跑起來會快得多，
 > 如果只有他們測過，這個門檻會一路矇混到第四週才爆。
 
-**複現方式**：實測腳本未進儲存庫（torch 不在專案相依裡，且 `pyproject.toml`／`uv.lock`
-是凍結的共管路徑）。要複現請用隔離環境，不要動專案相依：
+**複現方式**：三支腳本在 [`tools/bench/`](../tools/bench/)，本節與下面兩節的數字都出自它們。
+它們**不在專案相依裡**（torch 是硬體相依套件，而 `pyproject.toml`／`uv.lock` 是凍結的
+共管路徑），所以用隔離環境跑：
 
 ```bash
-uv run --no-project --python 3.11 --with torch --with transformers --with sentencepiece python bench.py
+uv run --no-project --python 3.11 --with torch --with transformers --with sentencepiece python tools/bench/rerank_latency.py
+uv run --no-project --python 3.11 --with torch --with transformers --with sentencepiece python tools/bench/embed_latency.py
+uv run --no-project --python 3.11 python tools/bench/slm_latency.py
 ```
+
+`--no-project` 是關鍵：一次性環境，不碰 `.venv`、不改 `uv.lock`。
+細節與下載失敗的繞法見 [`tools/bench/README.md`](../tools/bench/README.md)。
+
+> [!IMPORTANT]
+> **請在自己的機器上重跑一次。** 目前這三節的數字只來自 C 一台
+> （i5-9300H / GTX 1650）。B 與 D 的硬體同級，A 與 E 快得多——
+> 而 S12 的門檻正是「最慢那台過不過得了」。
 
 ---
 
