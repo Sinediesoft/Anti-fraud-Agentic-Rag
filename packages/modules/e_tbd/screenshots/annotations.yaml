@@ -1,0 +1,497 @@
+# 由 _sources/render.py 產生，不要手改 —— 改 _sources/shots.yaml 後重跑。
+# 標註與畫面同源，所以不可能對不上。
+
+format_version: 1
+module: e_tbd
+annotator: c85016921920-design
+screenshots:
+- file: e01_jobpost_normal.png
+  layout: ad_post
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: false
+  blocks:
+  - text: 宏益文具行
+    role: title
+  - text: 行政助理
+    role: title
+  - text: 月薪 30,000 - 34,000 元
+    role: price
+  - text: 台中市西區 / 全職 / 日班
+    role: field
+  - text: 工作內容：文件建檔、電話接聽、簡易帳務整理。需熟 Excel。
+    role: body
+  - text: 應徵條件：高中職以上，經驗不拘，具細心特質佳。
+    role: body
+  - text: 我要應徵
+    role: button
+  notes: 正常職缺。對照組——只餵詐騙樣本會讓模型看到職缺就報警
+- file: e02_jobpost_suspicious.png
+  layout: ad_post
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 誠徵 線上客服專員（急）
+    role: title
+  - text: 日領 3,000 - 5,000 元
+    role: price
+  - text: 不限地區 / 時間自由 / 在家可做
+    role: field
+  - text: 免經驗！免學歷！當天面試當天上工！
+    role: body
+  - text: 工作輕鬆簡單，只需協助處理公司訂單資料。
+    role: body
+  - text: 意者請加 LINE 詳談
+    role: body
+  - text: 加 LINE 詢問
+    role: button
+  notes: 高薪日領免經驗，沒有工作內容說明
+- file: e03_jobpost_detail.png
+  layout: ad_post
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 鑫達國際企業有限公司
+    role: title
+  - text: 財務專員助理
+    role: title
+  - text: 月薪 65,000 元起
+    role: price
+  - text: 職務類別：財務／會計
+    role: field
+  - text: 工作性質：全職
+    role: field
+  - text: 上班地點：面議
+    role: field
+  - text: 需求人數：不限
+    role: field
+  - text: 學歷要求：不拘
+    role: field
+  - text: 工作內容：協助公司資金調度與帳務往來，需配合公司流程操作。
+    role: body
+  - text: 我要應徵
+    role: button
+  notes: 結構化欄位齊全但公司資訊空泛。S11 要求抓職缺的結構化欄位
+- file: e04_fbgroup_post.png
+  layout: ad_post
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 台中打工兼職交流社團
+    role: title
+  - text: 陳小恩
+    role: field
+  - text: 3 小時前
+    role: field
+  - text: 【急徵】短期工讀 一天 2,500 起
+    role: body
+  - text: 內容超簡單，幫忙收發包裹整理資料而已
+    role: body
+  - text: 有意願私訊我或加賴 ID：work_tc888
+    role: body
+  - text: 名額不多要快唷
+    role: body
+  - text: 留言 37 · 分享 12
+    role: field
+  notes: 社團招募貼文
+- file: e05_fbgroup_dark.png
+  layout: ad_post
+  variant:
+    width: 720
+    theme: dark
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 全台打工資訊分享區
+    role: title
+  - text: 林品瑜
+    role: field
+  - text: 昨天 21:04
+    role: field
+  - text: 徵人囉 日結 2,800 無經驗可
+    role: body
+  - text: 公司正常營運有登記 不是那種怪怪的工作
+    role: body
+  - text: 意者加 LINE：hr_lin0925
+    role: body
+  - text: 留言 54 · 分享 8
+    role: field
+  notes: 同類貼文的深色模式
+- file: e06_jobpost_lowres.png
+  layout: ad_post
+  variant:
+    width: 720
+    theme: light
+    quality: low_res
+  is_scam: true
+  blocks:
+  - text: 徵 兼職助理
+    role: title
+  - text: 日領 2,500
+    role: price
+  - text: 免經驗 可在家 時間彈性
+    role: body
+  - text: 詳情加 LINE 詢問
+    role: body
+  notes: 低解析度。真實使用者常常是轉傳好幾手的圖
+- file: e07_chat_intro.png
+  layout: chat
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: false
+  blocks:
+  - text: 您好，看到您在社團應徵，我是人資小林
+    role: bubble
+    speaker: other
+  - text: 您好，請問工作內容是什麼呢
+    role: bubble
+    speaker: self
+  - text: 主要是協助處理公司的訂單與資料建檔
+    role: bubble
+    speaker: other
+  - text: 時間很彈性，一天大概 3 到 4 小時
+    role: bubble
+    speaker: other
+  - text: 好的，那薪水怎麼算
+    role: bubble
+    speaker: self
+  - text: 日結，一天 2,500，做滿一週另外加獎金
+    role: bubble
+    speaker: other
+  notes: 面試開場還看不出問題。對照組——前半段跟正常求職沒有差別
+- file: e08_chat_id_request.png
+  layout: chat
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 那我幫您建檔，需要您的基本資料
+    role: bubble
+    speaker: other
+  - text: 好的
+    role: bubble
+    speaker: self
+  - text: 麻煩拍身分證正反面給我
+    role: bubble
+    speaker: other
+  - text: 健保卡也一起，我們人事系統要雙證件
+    role: bubble
+    speaker: other
+  - text: 這個一定要嗎
+    role: bubble
+    speaker: self
+  - text: 對呀，正式員工都要建檔的，很快就好
+    role: bubble
+    speaker: other
+  notes: 要求身分證。索取存摺的前一步
+- file: e09_chat_passbook.png
+  layout: chat
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 資料收到了，再來要設定薪轉
+    role: bubble
+    speaker: other
+  - text: 麻煩提供存摺封面照片
+    role: bubble
+    speaker: other
+  - text: 要拍到帳號跟戶名那一面
+    role: bubble
+    speaker: other
+  - text: 這是要做什麼用的
+    role: bubble
+    speaker: self
+  - text: 薪水要匯給您呀，沒有帳號沒辦法匯款
+    role: bubble
+    speaker: other
+  - text: 我們公司都是這樣走流程的
+    role: bubble
+    speaker: other
+  notes: 說明書 S11 為 E 點名的關鍵畫面
+- file: e10_chat_card_mail.png
+  layout: chat
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 因為您是新人，帳務要走公司的系統
+    role: bubble
+    speaker: other
+  - text: 提款卡先寄給財務部設定，設定完就寄回
+    role: bubble
+    speaker: other
+  - text: 店到店就可以，運費我們出
+    role: bubble
+    speaker: other
+  - text: 卡片寄出去不會有問題嗎
+    role: bubble
+    speaker: self
+  - text: 不會，我們每個新人都這樣，公司有保險
+    role: bubble
+    speaker: other
+  - text: 寄好把單號給我，我請財務盡快處理
+    role: bubble
+    speaker: other
+  notes: 要求寄出提款卡
+- file: e11_chat_netbank.png
+  layout: chat
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 系統這邊還要綁定網路銀行
+    role: bubble
+    speaker: other
+  - text: 帳號跟密碼給我，我幫您設定就好
+    role: bubble
+    speaker: other
+  - text: 密碼也要給嗎
+    role: bubble
+    speaker: self
+  - text: 對，不然系統綁不了
+    role: bubble
+    speaker: other
+  - text: 剛剛有傳簡訊給您，把那組六位數字給我
+    role: bubble
+    speaker: other
+  - text: 這是公司內部系統，很安全您放心
+    role: bubble
+    speaker: other
+  notes: 索取網銀帳密與驗證碼
+- file: e12_chat_dark.png
+  layout: chat
+  variant:
+    width: 720
+    theme: dark
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 明天有一筆款項會進您的帳戶
+    role: bubble
+    speaker: other
+  - text: 進來之後麻煩您先不要動
+    role: bubble
+    speaker: other
+  - text: 等我通知再處理
+    role: bubble
+    speaker: other
+  - text: 這是什麼錢
+    role: bubble
+    speaker: self
+  - text: 客戶的貨款，我們公司帳戶在審核不能收
+    role: bubble
+    speaker: other
+  notes: 深色模式。氣泡左右判定在深色下是另一組顏色條件
+- file: e13_chat_group.png
+  layout: chat
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 大家好，歡迎新夥伴加入
+    role: bubble
+    speaker: other
+  - text: 請新人先把資料傳給主管建檔
+    role: bubble
+    speaker: other
+  - text: 我昨天傳了，今天就收到第一筆了
+    role: bubble
+    speaker: other
+  - text: 真的假的 這麼快
+    role: bubble
+    speaker: self
+  - text: 對呀 我做兩週領了六萬
+    role: bubble
+    speaker: other
+  - text: 新人不要怕 照主管說的做就好
+    role: bubble
+    speaker: other
+  notes: 多人群組。說明書說多發話人氣泡分群是全系統最難的
+- file: e14_chat_blurred.png
+  layout: chat
+  variant:
+    width: 720
+    theme: light
+    quality: blurred
+  is_scam: true
+  blocks:
+  - text: 卡片寄了嗎
+    role: bubble
+    speaker: other
+  - text: 寄了 昨天下午
+    role: bubble
+    speaker: self
+  - text: 單號給我
+    role: bubble
+    speaker: other
+  - text: 密碼記得一起傳
+    role: bubble
+    speaker: other
+  notes: 手震拍糊。真實使用者上傳的就是這樣
+- file: e15_chat_withdraw.png
+  layout: chat
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 錢進來了嗎
+    role: bubble
+    speaker: other
+  - text: 進來了 有 38 萬
+    role: bubble
+    speaker: self
+  - text: 好 您現在去提款機領出來
+    role: bubble
+    speaker: other
+  - text: 一次領不完就分幾次
+    role: bubble
+    speaker: other
+  - text: 領完在超商等，會有專員去跟您拿
+    role: bubble
+    speaker: other
+  - text: 這樣可以嗎 我有點怕
+    role: bubble
+    speaker: self
+  - text: 放心 這是公司的資金調度流程
+    role: bubble
+    speaker: other
+  notes: 指示提領現金交付——風險最高的一步
+- file: e16_sms_interview.png
+  layout: sms
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: +886 9XX-XXX-921
+    role: title
+  - text: 【面試通知】您好，您應徵的職缺已通過初審
+    role: bubble
+    speaker: other
+  - text: 請於今日內點選連結完成報到資料填寫
+    role: bubble
+    speaker: other
+  - text: hxxps://reurl-example.tw/a8Kd2
+    role: bubble
+    speaker: other
+  - text: 逾期將取消資格
+    role: bubble
+    speaker: other
+  notes: 簡訊面試通知帶短網址
+- file: e17_sms_bank_alert.png
+  layout: sms
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: false
+  blocks:
+  - text: 示範商業銀行
+    role: title
+  - text: 【重要通知】您的帳戶 ****3821 已列為警示帳戶
+    role: bubble
+    speaker: system
+  - text: 相關款項業已暫停交易
+    role: bubble
+    speaker: system
+  - text: 請本人攜帶雙證件親至原開戶分行辦理
+    role: bubble
+    speaker: system
+  - text: 本行不會以電話或簡訊要求您提供密碼
+    role: bubble
+    speaker: system
+  notes: 真的銀行通知。對照組——看起來很像詐騙但不是
+- file: e18_profile_recruiter.png
+  layout: profile
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 人資 - 小林
+    role: title
+  - text: 鑫達國際 人力資源部
+    role: field
+  - text: 加入時間：3 天前
+    role: field
+  - text: 共同群組：0
+    role: field
+  - text: 認真工作 誠信第一
+    role: body
+  - text: 加入好友
+    role: button
+  notes: 招募者的個人檔案，資訊空泛且剛建立
+- file: e19_shipping_receipt.png
+  layout: product
+  variant:
+    width: 720
+    theme: light
+    quality: low_res
+  is_scam: true
+  blocks:
+  - text: 店到店寄件單
+    role: title
+  - text: 寄件編號：EX-000000000
+    role: field
+  - text: 寄件人：王○○
+    role: field
+  - text: 收件門市：示範門市
+    role: field
+  - text: 收件人：陳○○
+    role: field
+  - text: 內容物：文件
+    role: field
+  - text: 運費 60 元
+    role: price
+  notes: 店到店寄件單據，低解析度翻拍
+- file: e20_company_page.png
+  layout: ad_post
+  variant:
+    width: 720
+    theme: light
+    quality: sharp
+  is_scam: true
+  blocks:
+  - text: 鑫達國際企業有限公司
+    role: title
+  - text: 產業類別：其他綜合服務業
+    role: field
+  - text: 員工人數：未提供
+    role: field
+  - text: 資本額：未提供
+    role: field
+  - text: 公司地址：未提供
+    role: field
+  - text: 本公司為新創團隊，業務涵蓋國際貿易與資金調度服務。
+    role: body
+  - text: 目前開放職缺 1 筆
+    role: field
+  notes: 求職網站上的公司介紹頁，查不到實質資訊
