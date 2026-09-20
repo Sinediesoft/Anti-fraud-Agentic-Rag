@@ -3,8 +3,13 @@
 用 Python 標準功能自己寫的狀態機，不裝額外框架。
 好處是每一步都看得見，不是黑箱 —— 執行紀錄就是從這裡來的。
 
-順序：收到輸入 →（有圖就先解析）→ 遮個資 → 分類 → 抽歷程 → 檢索案例與法條 → 合成結果
+順序：收到輸入 →（有圖就先解析）→ 遮個資 → 分類 → 抽歷程 → 檢索案例與法條
+      → 把檢索結果餵給地端模型生成說明 → 合成結果
 五個人的流程可以完全不一樣。
+
+檢索與生成是分開的兩步，順序不能顛倒 —— 生成那步要吃前一步的產出，
+這就是 RAG 跟「直接問模型」的差別。生成掛掉時前面的檢索結果仍然拿得出來，
+所以那一步失敗只會讓說明退回劇本的固定版本，不會讓整份判讀消失。
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ from contracts import (
 )
 from shared import deid
 
-from . import m2_vision, m3_retrieval, m4_judgement
+from . import generation, m2_vision, m3_retrieval, m4_judgement
 
 _RISK_BY_NAME = {
     "low": RiskLevel.LOW,
@@ -48,6 +53,7 @@ class Context:
     masked_text: str = ""
     judgement: m4_judgement.Judgement | None = None
     similar: list = field(default_factory=list)
+    explanation: str = ""  # 模型生成的白話說明。空的表示退回劇本固定版本
     trace: list[TraceEvent] = field(default_factory=list)
     degraded_reasons: list[str] = field(default_factory=list)
 
@@ -105,11 +111,26 @@ def run(payload: AnalyzeInput, pack: Any, playbook: dict) -> Verdict:
     def retrieve() -> None:
         ctx.similar = m3_retrieval.search(ctx.combined_text, top_k=5)
 
+    def generate() -> None:
+        # RAG 的 G：把上一步檢索到的案例連同敘述交給地端模型。
+        # 餵的是遮蔽過的文字，理由見 generation 模組的說明。
+        stage_id = ctx.judgement.stage_id if ctx.judgement else ""
+        stage = next((s for s in playbook.get("stages", []) if s.get("id") == stage_id), None)
+        text, why = generation.explain(
+            ctx.masked_text, ctx.similar, stage.get("name", "") if stage else ""
+        )
+        ctx.explanation = text
+        if why:
+            # 這不是壞掉，是退路啟動了 —— 記進降級原因讓它看得見，
+            # 不要靜悄悄地退回固定說明然後假裝那是模型寫的。
+            ctx.degraded_reasons.append(f"說明退回劇本固定版本：{why}")
+
     _step(ctx, "m2:截圖理解", read_images)
     _step(ctx, "multimodal:合併輸入", combine)
     _step(ctx, "shared.deid:去識別化", apply_deid)
     _step(ctx, "m4:分類與抽取", classify_and_extract)
     _step(ctx, "m3:檢索相似案例", retrieve)
+    _step(ctx, "slm:生成白話說明", generate)
 
     return _compose(ctx)
 
@@ -159,7 +180,8 @@ def _compose(ctx: Context) -> Verdict:
         risk_level=risk,
         scam_type=ctx.pack.tactic or ctx.pack.name,
         scam_stage=stage.get("name", "") if stage else "",
-        stage_explanation=stage.get("explanation", "") if stage else "",
+        # 模型生成的優先，生成不出來才用劇本裡寫死的那一份
+        stage_explanation=ctx.explanation or (stage.get("explanation", "") if stage else ""),
         similar_cases=ctx.similar,
         legal_refs=legal,
         actions=actions,

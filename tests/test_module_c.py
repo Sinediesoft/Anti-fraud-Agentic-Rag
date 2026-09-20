@@ -16,11 +16,11 @@ import importlib.util
 import json
 
 import pytest
-from contracts import AnalyzeInput, Verdict
+from contracts import AnalyzeInput, SimilarCase, Verdict
 from shared import models
 
 from app.registry import load
-from packages.modules.c_tbd import facets
+from packages.modules.c_tbd import facets, generation
 from packages.modules.c_tbd.m1_corpus import Case, build_subset, coverage
 from packages.modules.c_tbd.m3_retrieval import (
     MODEL_READY,
@@ -502,3 +502,69 @@ def test_覆蓋率報得出詞彙表有但語料沒有的值():
     used, unused = cov["target"]
     assert used == []  # 三筆合成資料沒有人自稱「投資人」
     assert unused  # 所以詞彙表那十個全部列為未使用
+
+
+# ── 生成：RAG 的 G ──────────────────────────────────────────────────
+
+
+def _fake_hits():
+    return [
+        SimilarCase(case_id="X1", source="165", excerpt="先小額出金再要求加碼", label="假投資詐騙"),
+        SimilarCase(case_id="X2", source="165", excerpt="客服說要繳保證金才能解凍", label="假投資"),
+    ]
+
+
+def test_prompt真的把檢索到的案例放進去():
+    """這條是 RAG 跟「直接問模型」的分界線。
+
+    生成內容沒辦法斷言，但「檢索結果有沒有真的進到 prompt」可以 ——
+    少了這一段，整條流程就只是一個比較慢的聊天機器人。
+    """
+    prompt = generation.build_prompt("我匯了五十萬出不來", _fake_hits(), "被要求先付錢")
+    assert "先小額出金再要求加碼" in prompt
+    assert "客服說要繳保證金才能解凍" in prompt
+    assert "我匯了五十萬出不來" in prompt
+    assert "被要求先付錢" in prompt
+
+
+def test_prompt只放前幾筆免得吃掉上下文():
+    many = _fake_hits() * 5
+    prompt = generation.build_prompt("敘述", many)
+    assert prompt.count("先小額出金再要求加碼") <= generation.MAX_CASES_IN_PROMPT
+
+
+def test_模型不可用時退回而不是把例外丟給使用者(monkeypatch):
+    def boom(*a, **k):
+        raise models.ModelDependencyError("連不上 Ollama")
+
+    monkeypatch.setattr(generation.models, "call_slm", boom)
+    text, why = generation.explain("我被騙了", _fake_hits())
+    assert text == ""
+    assert why and "Ollama" in why
+
+
+def test_模型吐太長就不採用(monkeypatch):
+    monkeypatch.setattr(generation.models, "call_slm", lambda *a, **k: "廢話。" * 500)
+    text, why = generation.explain("我被騙了", _fake_hits())
+    assert text == ""
+    assert "上限" in why
+
+
+def test_一模一樣的句子只留一次(monkeypatch):
+    monkeypatch.setattr(generation.models, "call_slm", lambda *a, **k: "甲句。乙句。甲句。")
+    text, why = generation.explain("我被騙了", _fake_hits())
+    assert why is None
+    assert text == "甲句。乙句。"
+
+
+def test_生成失敗時整份判讀仍然拿得出來(monkeypatch):
+    """退路的意義：生成掛掉只該讓說明退回劇本版本，不該讓判讀消失。"""
+
+    def boom(*a, **k):
+        raise models.ModelDependencyError("沒裝")
+
+    monkeypatch.setattr(generation.models, "call_slm", boom)
+    v = _module().analyze(AnalyzeInput(text="我在臉書看到投資廣告，匯款後出不了金"))
+    assert v.stage_explanation  # 劇本裡那份固定說明
+    assert v.similar_cases  # 檢索結果不受影響
+    assert any("說明退回劇本固定版本" in r for r in v.degraded_reasons)
