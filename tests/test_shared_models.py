@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 
 import pytest
 from shared import deid, models
@@ -33,12 +34,62 @@ def test_遮蔽過的文字才進得了雲端的門():
 
 
 def test_模型未鎖定時報錯而不是偷換一個模型():
-    # 重排序還沒鎖 —— 呼叫它要報「還沒決議」，不是隨便挑一個跑。
+    # 重排序與雲端都還沒鎖 —— 呼叫要報「還沒決議」，不是隨便挑一個跑。
     with pytest.raises(models.ModelNotSelectedError):
         models.rerank("q", ["a"])
-    # SLM 鎖定了但還沒接上，報的也是同一種：兩者的下一步都是「等 S3」。
-    with pytest.raises(models.ModelNotSelectedError):
-        models.call_slm("hi")
+
+
+def test_地端模型連不上時報的是相依錯不是未鎖定():
+    """Ollama 沒開跟模型沒鎖定是兩回事，訊息要講得出下一步。"""
+    models._SLM_VERIFIED = ""
+    old = models.OLLAMA_HOST
+    models.OLLAMA_HOST = "http://127.0.0.1:1"  # 不會有人在聽的埠
+    try:
+        with pytest.raises(models.ModelDependencyError) as exc:
+            models.call_slm("hi")
+        assert "ollama" in str(exc.value).lower()
+    finally:
+        models.OLLAMA_HOST = old
+        models._SLM_VERIFIED = ""
+
+
+def test_digest對不上就擋下來而不是照跑():
+    """MODEL_LOCK 的 revision 釘 digest 不是標籤，就是為了擋這件事。
+
+    釘了而不比對等於沒釘 —— 五個人裡有一個人的 qwen2.5:3b 是別的版本，
+    分數就不能互比，而且不會有任何徵兆。
+    """
+    models._SLM_VERIFIED = ""
+    real = models._ollama
+    name = models.MODEL_LOCK["slm"].name
+    models._ollama = lambda path, payload=None, timeout=10.0: {
+        "models": [{"name": name, "digest": "deadbeef" * 8}]
+    }
+    try:
+        with pytest.raises(models.ModelDependencyError) as exc:
+            models.call_slm("hi")
+        assert "digest" in str(exc.value)
+    finally:
+        models._ollama = real
+        models._SLM_VERIFIED = ""
+
+
+def _ollama_live() -> bool:
+    try:
+        models._ollama("/api/tags")
+        return True
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _ollama_live(), reason="這台沒有在跑 Ollama")
+def test_地端模型真的回得出東西而且吃得下格式約束():
+    """只有 Ollama 在跑的機器會跑。CI 沒有 Ollama，所以會 skip。"""
+    out = models.call_slm("只回四個字：測試成功")
+    assert out.strip()
+
+    raw = models.call_slm("把「我用ATM匯款」抽成 JSON，欄位只要 payment。", grammar="json")
+    json.loads(raw)  # 不是合法 JSON 就直接炸 —— grammar 沒生效的話會是散文
 
 
 def test_嵌入沒裝套件時報的是相依錯而不是未鎖定():

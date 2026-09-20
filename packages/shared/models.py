@@ -15,7 +15,10 @@ S3 進行中：地端 SLM 與嵌入模型已鎖定（見 MODEL_LOCK），重排�
 
 from __future__ import annotations
 
+import json
 import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 
 from contracts import MaskedText
@@ -129,6 +132,14 @@ EMBED_BATCH = 8
 # 這一行要跟著 MODEL_LOCK["embedding"] 一起改。
 EMBED_POOLING = "cls"
 
+# ── 地端 SLM 的連線設定 ────────────────────────────────────────────
+#
+# 走 Ollama 的 HTTP API，用標準函式庫的 urllib —— 不為了這件事多一個相依。
+# 位址可以用環境變數改（有人把 Ollama 裝在教室電腦上，見環境對齊追蹤表的
+# D 那欄），但取樣參數不行，那是五個人要一致的東西。
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+SLM_TIMEOUT_S = 180  # 冷啟動實測 9.2 秒，長輸出會更久；寧可等也不要半路砍掉
+
 
 def _require(purpose: str) -> ModelLock:
     lock = MODEL_LOCK[purpose]
@@ -140,14 +151,81 @@ def _require(purpose: str) -> ModelLock:
     return lock
 
 
+def _ollama(path: str, payload: dict | None = None, timeout: float = 10.0) -> dict:
+    """打 Ollama 的 HTTP API。連不上要講清楚下一步，不要丟原始的連線錯誤。"""
+    url = f"{OLLAMA_HOST.rstrip('/')}{path}"
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(  # noqa: S310 —— 位址是本機常數，不是使用者輸入
+        url, data=data, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise ModelDependencyError(
+            f"Ollama 回了 HTTP {exc.code}。模型沒抓下來的話跑：ollama pull {MODEL_LOCK['slm'].name}"
+        ) from exc
+    except OSError as exc:
+        raise ModelDependencyError(
+            f"連不上 Ollama（{OLLAMA_HOST}）。先確認它在跑：ollama serve。"
+            f"裝在別台機器的話用環境變數 OLLAMA_HOST 指過去。"
+        ) from exc
+
+
+_SLM_VERIFIED = ""
+
+
+def _verify_slm(lock: ModelLock) -> None:
+    """確認跑的真的是鎖定的那一份，不是同名的另一版。
+
+    MODEL_LOCK 的 revision 釘的是 digest 不是標籤，理由就在這裡：標籤會被
+    上游重新指向，digest 不會。但釘了而不比對等於沒釘 —— 五個人裡只要有
+    一個人的 qwen2.5:3b 是別的版本，分數就不能互比，而且不會有任何徵兆。
+    """
+    global _SLM_VERIFIED
+    if _SLM_VERIFIED == lock.revision:
+        return
+    tags = _ollama("/api/tags").get("models", [])
+    found = next((m for m in tags if m.get("name") == lock.name), None)
+    if found is None:
+        raise ModelDependencyError(f"Ollama 裡沒有 {lock.name}。跑：ollama pull {lock.name}")
+    digest = str(found.get("digest", ""))
+    if not digest.startswith(lock.revision):
+        raise ModelDependencyError(
+            f"{lock.name} 的 digest 對不上鎖定表：這台是 {digest[:12]}，"
+            f"鎖定的是 {lock.revision}。重抓一次（ollama pull）或回頭確認 "
+            f"MODEL_LOCK —— 版本不同的模型算出來的分數不能互比。"
+        )
+    _SLM_VERIFIED = lock.revision
+
+
 def call_slm(prompt: str, *, grammar: str | None = None) -> str:
     """呼叫地端小模型。原文可以進來 —— 它在使用者自己的電腦上跑，資料不離開。
 
-    grammar 是格式約束：強制模型只能吐出符合格式的答案（S13 第 4 點的第一層退路）。
+    grammar 是格式約束：強制模型只能吐出符合格式的答案（S13 第 4 點的第一層
+    退路）。Ollama 收 "json" 或一份 JSON Schema，直接轉給它的 format 欄位。
+
+    取樣參數一律用本模組寫死的那組，不開放呼叫端調 —— 尤其 num_ctx：
+    五個人用不同的值會在不同的點被截斷，而超出時 Ollama 不報錯，只是安靜
+    從前面截掉。
     """
     lock = _require("slm")
-    # TODO(S3)：接上 Ollama 或 llama.cpp。參數用上面寫死的那組，不開放外面調。
-    raise ModelNotSelectedError(f"{lock.name} 的呼叫尚未實作（S3 之後補）")
+    _verify_slm(lock)
+    body = {
+        "model": lock.name,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": TEMPERATURE,
+            "top_p": TOP_P,
+            "seed": SEED,
+            "num_predict": MAX_TOKENS,
+            "num_ctx": NUM_CTX,
+        },
+    }
+    if grammar:
+        body["format"] = grammar
+    return _ollama("/api/generate", body, timeout=SLM_TIMEOUT_S).get("response", "")
 
 
 def _import_ml():
