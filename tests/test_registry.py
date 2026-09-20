@@ -31,11 +31,13 @@ def test_載入全部時不會有失敗():
 
 
 def test_未設定組合的模組仍然載得起來():
-    # 空置狀態下架構要能跑，只是不認領案子
-    mod = load("a_tbd").get("a_tbd")
+    # 空置狀態下架構要能跑，只是不認領案子。
+    # 原本拿 a_tbd 當例子，但它在 2026-09-20 填了 LINE x 假投資。
+    # e_tbd 有 platform/tactic 但 labels_canon 還空著，是目前未設定完成的那個。
+    mod = load("e_tbd").get("e_tbd")
     assert mod is not None
-    assert mod.usable
-    assert mod.pack.is_configured is False
+    assert mod.usable  # 載得起來
+    assert mod.pack.is_configured is False  # 但不認領案子
 
 
 def test_找不到的模組回報失敗而不是爆炸():

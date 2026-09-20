@@ -31,10 +31,10 @@ def test_遮蔽過的文字才進得了雲端的門():
 
 
 def test_模型未鎖定時報錯而不是偷換一個模型():
+    # 這條規矩守的是「沒鎖定就報錯」，不是特定哪個模型。
+    # slm 與 embedding 在 2026-09-20 鎖定並接線了，所以改用還沒鎖的那兩個舉例。
     with pytest.raises(models.ModelNotSelectedError):
-        models.call_slm("hi")
-    with pytest.raises(models.ModelNotSelectedError):
-        models.embed(["hi"])
+        models.rerank("q", ["a"])
 
 
 def test_溫度鎖死():

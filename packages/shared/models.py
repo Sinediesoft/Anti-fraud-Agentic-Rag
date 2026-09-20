@@ -11,7 +11,10 @@ S3 進行中：地端 SLM 與嵌入模型已鎖定（見 MODEL_LOCK），重排�
 
 from __future__ import annotations
 
+import json
 import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 
 from contracts import MaskedText
@@ -98,6 +101,10 @@ SEED = 20260918
 # 被截斷，輸出就不能互比。截斷的可觀測訊號見 tools/bench/slm_truncation.py。
 NUM_CTX = 8192
 
+# Ollama 的位置。預設是本機 —— 地端模型的重點就是資料不離開這台電腦。
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "300"))
+
 
 def _require(purpose: str) -> ModelLock:
     lock = MODEL_LOCK[purpose]
@@ -113,17 +120,76 @@ def call_slm(prompt: str, *, grammar: str | None = None) -> str:
     """呼叫地端小模型。原文可以進來 —— 它在使用者自己的電腦上跑，資料不離開。
 
     grammar 是格式約束：強制模型只能吐出符合格式的答案（S13 第 4 點的第一層退路）。
+    Ollama 用 format 參數收 JSON schema。
+
+    走 Ollama 的 HTTP API，只用標準函式庫 —— 不引入新相依。
+    num_ctx 一定要明確帶上：Ollama 預設只給 4096，而超出時它不報錯，
+    只會安靜從前面截掉，最先被丟掉的就是系統指示。
     """
     lock = _require("slm")
-    # TODO(S3)：接上 Ollama 或 llama.cpp。參數用上面寫死的那組，不開放外面調。
-    raise ModelNotSelectedError(f"{lock.name} 的呼叫尚未實作（S3 之後補）")
+    payload: dict = {
+        "model": lock.name,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": TEMPERATURE,
+            "top_p": TOP_P,
+            "seed": SEED,
+            "num_ctx": NUM_CTX,
+            "num_predict": MAX_TOKENS,
+        },
+    }
+    if grammar:
+        payload["format"] = json.loads(grammar) if grammar.strip().startswith("{") else grammar
+
+    req = urllib.request.Request(
+        f"{OLLAMA_HOST}/api/generate",
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+    )
+    req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as r:
+            body = json.loads(r.read())
+    except urllib.error.URLError as e:
+        raise ModelNotSelectedError(
+            f"連不上 Ollama（{OLLAMA_HOST}）：{e.reason}。"
+            f"請先啟動 `ollama serve`，並確認 `ollama list` 裡有 {lock.name}。"
+        ) from e
+    return body.get("response", "").strip()
+
+
+_EMBEDDER = None
 
 
 def embed(texts: list[str]) -> list[list[float]]:
-    """把文字變成向量。五個人各建各的向量庫，但都從這裡取向量。"""
+    """把文字變成向量。五個人各建各的向量庫，但都從這裡取向量。
+
+    模型與 revision 都鎖死：revision 不釘的話，上游更新後大家的向量就不同源，
+    而向量庫是各自建的 —— 不會有人發現，只會發現分數對不起來。
+
+    device 與 dtype 跟著跨平台決議走 cpu / float32。MPS 與 CUDA 的低位數值
+    差異會讓五個人的分數不能互比，這比那點速度重要。
+
+    sentence-transformers 與 torch 刻意不在專案相依裡（requirements.txt 寫明
+    torch 是硬體相依、故意不鎖版本，而 pyproject.toml 與 uv.lock 是凍結的
+    共管路徑）。所以這裡延遲匯入，沒裝的人會拿到裝法，不是 ImportError。
+    """
+    global _EMBEDDER
     lock = _require("embedding")
-    # TODO(S3)：接上 sentence-transformers，模型固定用 lock.name + lock.revision
-    raise ModelNotSelectedError(f"{lock.name} 的呼叫尚未實作（S3 之後補）")
+    if _EMBEDDER is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as e:
+            raise ModelNotSelectedError(
+                "缺少 sentence-transformers。它刻意不在專案相依裡（torch 是硬體相依），"
+                "請用隔離環境跑：\n"
+                "    uv run --no-project --python 3.11 --with sentence-transformers "
+                "python 你的程式.py\n"
+                "或只在本機裝：uv pip install sentence-transformers"
+            ) from e
+        _EMBEDDER = SentenceTransformer(lock.name, revision=lock.revision or None, device="cpu")
+    return [v.tolist() for v in _EMBEDDER.encode(texts, convert_to_numpy=True)]
 
 
 def rerank(query: str, candidates: list[str]) -> list[float]:
