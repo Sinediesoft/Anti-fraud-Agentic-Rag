@@ -1,27 +1,44 @@
 # ═══════════════════════════════════════════════════════════════
-#  模組 A — 平台 × 詐騙手法尚未決定
+#  模組 A — LINE × 假投資（2026-09-20 決定，2026-09-21 更新這份清單）
 #
-#  決定之後要改的地方（照順序做）：
-#    1. 這份檔案的 platform / tactic / labels_canon / label_aliases /
-#       platform_terms / route_terms / negative_terms / knowledge_refs
-#    2. 資料夾改名：packages/modules/a_tbd → a_<平台>_<手法>
-#       （例：a_fb_shopping），pack.yaml 的 id 要跟資料夾名一致
-#    3. .github/team.yml 與 .github/CODEOWNERS 的路徑
-#    4. playbook.yaml 的階段與行動清單
+#  已經做完的：
+#    · platform / tactic / labels_canon / platform_terms / route_terms
+#      route_terms 是從 1,000 筆抽樣用「區辨力」量出來的（正例命中率 −
+#      負例命中率），不是憑感覺列的 —— 每一行後面都寫著數字，要改之前
+#      先看那些數字。刻意不放的詞也記了理由。
+#    · M1 切語料 1,000 筆（data/ 不進版控，各自本機跑）
+#    · M3 向量檢索接上 bge-m3，index/ 各自本機建
+#    · M4 規則抽取（三層退路的第三層）
 #
-#  在填完 platform / tactic / labels_canon 之前，can_handle() 一律回 0，
-#  外殼會把案子判成「尚未涵蓋」—— 空置狀態下不會亂搶案子，也不會給錯建議。
+#  還沒做，照順序：
+#    1. playbook.yaml 的階段與行動清單還是範本的 TODO —— 畫面上「目前
+#       階段」「接下來該做什麼」顯示的就是那幾行 TODO 文字（S10）
+#    2. M4 的 prompt 還沒寫，_SLM_PROMPT_READY 還是 False（S13）
+#    3. eval/route_questions.yaml 的 20 題考題還沒出 —— S16 入場檢查
+#       七項裡現在就卡這一項（0/0，要 17/20）（S12）
+#    4. negative_terms 與 knowledge_refs 還空著（S18 / S12）
+#    5. stats 的兩個數字還是 null（S9）
+#    6. 資料夾改名：packages/modules/a_tbd → a_line_investment，
+#       pack.yaml 的 id 要跟資料夾名一致，.github/team.yml 與
+#       .github/CODEOWNERS 的路徑要同步改
+#
+#  🔴 已知問題（2026-09-21 路由實測）：下面 platform_terms 的「line」是
+#     小寫，但 module.py 的 can_handle() 用 `t in text` 比對，大小寫敏感。
+#     實測 1,000 筆語料裡 837 筆寫的是大寫「LINE」—— 也就是九成的案子
+#     拿不到那 +0.15 的平台加分。thresholds.route_min 那段註解假設加分
+#     有生效，實際上沒有，那個門檻要重新量。
 # ═══════════════════════════════════════════════════════════════
 id: a_tbd
 code: "A"
 name: LINE 投資詐騙
-owner: TODO-你的名字
+owner: Sinediesoft
 version: "0.1.0"
 
 # 說明書：A 是免費版開放的那一組（件數最大的一類）
 plan: free
 
-# TODO：平台 × 詐騙手法尚未決定
+# 2026-09-20 決定。改這兩個值等於換一個模組，要連 labels_canon、
+# platform_terms、route_terms 與 data/ 的切片一起重來。
 platform: "LINE"
 tactic: "假投資"
 
