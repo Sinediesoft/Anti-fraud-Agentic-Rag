@@ -79,18 +79,159 @@ def load_local() -> list[Case]:
     return cases
 
 
-def build_subset(labels: list[str], platform_terms: list[str]) -> int:
+MIN_CHARS = 20  # 比這短的敘述沒有檢索價值，多半是「被詐騙」這類殘缺紀錄
+
+
+def _norm(s: object) -> str:
+    return str(s).strip() if s is not None else ""
+
+
+def read_shared(path: Path | None = None) -> list[dict]:
+    """讀共用語料 parquet，回傳原始 dict 清單。
+
+    pyarrow 延遲 import：跟 tools/fetch_corpus_165.py 同一個做法 —— 讓這個
+    模組在沒裝 pyarrow 的環境也 import 得起來（它只是 streamlit 的傳遞相依，
+    沒有宣告在 requirements.txt 裡，見 README 的已知待辦）。
+    """
+    src = path or SHARED_CORPUS
+    if not src.exists():
+        raise FileNotFoundError(
+            f"找不到共用語料 {src}。語料放共用雲端硬碟，路徑用環境變數 "
+            f"CORPUS_PARQUET 指定（見 data/README.md）。抓取腳本是 "
+            f"tools/fetch_corpus_165.py。"
+        )
+    import pyarrow.parquet as pq
+
+    return pq.read_table(src).to_pylist()
+
+
+def _matches_label(label: str, labels: list[str]) -> bool:
+    """標籤比對。165 的 CaseTitle 是官方分類，可信度比內文推斷高很多。"""
+    low = label.lower()
+    return any(t and t.lower() in low for t in labels)
+
+
+def _matches_platform(text: str, platform_terms: list[str]) -> bool:
+    """平台比對只能看內文 —— 165 的六個欄位裡沒有平台欄。
+
+    ⚠ 這是推斷，漏抓率不明。受害者寫「在網路上看到廣告」而沒寫臉書，
+      這筆就撈不到。所以 build_subset() 同時回報兩個數字（手法總數／
+      平台交集數），讓漏抓的規模看得見，而不是只給一個漂亮的結果。
+    """
+    low = text.lower()
+    return any(t and t.lower() in low for t in platform_terms)
+
+
+def build_subset(
+    labels: list[str],
+    platform_terms: list[str],
+    *,
+    source_path: Path | None = None,
+    out_path: Path | None = None,
+    platform_only: bool = True,
+) -> dict[str, int]:
     """從共用語料切出自己的那一份，寫進 data/cases.jsonl。
 
-    TODO(S9)：接上 polars 讀 parquet、接上 CKIP 斷詞、把清理規則寫完整。
-    現在只有骨架 —— 這支要能重現產出自己的資料檔才算做完 S9。
+    回傳統計 dict，key 對得上 pack.yaml 的 stats 欄位：
+
+        total_cases     這個手法總共幾筆（只看標籤）
+        platform_cases  其中在我的平台上的幾筆（標籤 ∩ 內文提到平台）
+
+    🔴 為什麼要回報兩個數字而不是一個：平台只能從內文推斷（165 沒有平台欄），
+       漏抓率不明。只給 platform_cases 會讓人以為「我的語料就這麼多」，
+       但實際上是「我認得出來的就這麼多」。兩個數字擺在一起，漏抓的規模
+       才看得見 —— 如果交集只有手法總數的 3%，那多半是漏抓不是真的稀少。
+
+    platform_only=False 時寫入整個手法的案例（不做平台交集）。語料太少時
+    的退路 —— 但那等於放棄「平台 × 手法」這個分法，要寫進報告。
     """
-    if not SHARED_CORPUS.exists():
-        raise FileNotFoundError(
-            f"找不到共用語料 {SHARED_CORPUS}。語料放共用雲端硬碟，"
-            f"路徑用環境變數 CORPUS_PARQUET 指定（見 data/README.md）。"
+    rows = read_shared(source_path)
+
+    by_label = []
+    for r in rows:
+        text = _norm(r.get("text"))
+        if len(text) < MIN_CHARS:
+            continue
+        if not _matches_label(_norm(r.get("label")), labels):
+            continue
+        by_label.append(r)
+
+    on_platform = [r for r in by_label if _matches_platform(_norm(r.get("text")), platform_terms)]
+    chosen = on_platform if platform_only else by_label
+
+    # 去重。混來源時 case_id 會撞號，所以鍵是 source + case_id
+    seen: set[tuple[str, str]] = set()
+    out: list[Case] = []
+    for r in chosen:
+        key = (_norm(r.get("source")) or "165", _norm(r.get("case_id")))
+        if not key[1] or key in seen:
+            continue
+        seen.add(key)
+        text = _norm(r.get("text"))
+        label = _norm(r.get("label"))
+        out.append(
+            Case(
+                case_id=key[1],
+                text=text,
+                source=key[0],
+                label=label,
+                date=_norm(r.get("date")),
+                county=_norm(r.get("county")),
+                facets=derive_from_text(text, label),
+            )
         )
-    raise NotImplementedError("S9 的工作：寫完篩選、清理、斷詞，並把統計填進 pack.yaml")
+
+    dest = out_path or LOCAL_CORPUS
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    # 結尾要有換行：pre-commit 的 end-of-file-fixer 會補，產生器不補的話
+    # 每次重建都會跟 hook 來回打架。
+    dest.write_text(
+        "".join(
+            json.dumps(
+                {
+                    "case_id": c.case_id,
+                    "text": c.text,
+                    "source": c.source,
+                    "label": c.label,
+                    "date": c.date,
+                    "county": c.county,
+                    "facets": c.facets,
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+            for c in out
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "scanned": len(rows),
+        "total_cases": len(by_label),
+        "platform_cases": len(on_platform),
+        "written": len(out),
+    }
+
+
+def coverage(cases: list[Case]) -> dict[str, tuple[list[str], list[str]]]:
+    """每個 facet 維度用到了詞彙表裡的哪些值、還有哪些沒用到。
+
+    移植自來源那套 tools/build_corpus.py，而且這是那支腳本最有價值的一段。
+
+    為什麼要印出來：詞彙表裡有「遊戲點數」但語料裡一筆都沒有，代表使用者問
+    「遊戲點數詐騙」會**抽得出過濾條件、然後篩出 0 筆** —— 那比抽不出條件更糟，
+    因為它會**保證**回答「沒有」，而使用者會把那句話讀成「沒有這種詐騙」。
+
+    這個語料是 19 萬筆真實案件，所以缺口多半不是語料的問題，而是
+    facets.derive_from_text() 的推斷漏抓 —— 看得見才修得了。
+    """
+    from .facets import TABLES
+
+    out: dict[str, tuple[list[str], list[str]]] = {}
+    for key, table in TABLES.items():
+        used = {v for c in cases for v in (c.facets or {}).get(key, [])}
+        out[key] = (sorted(used), [k for k in table if k not in used])
+    return out
 
 
 def stats(cases: list[Case]) -> dict[str, int]:
@@ -99,3 +240,74 @@ def stats(cases: list[Case]) -> dict[str, int]:
         "labels": len({c.label for c in cases if c.label}),
         "counties": len({c.county for c in cases if c.county}),
     }
+
+
+def _main() -> None:
+    """切語料並印出報告。
+
+        python -m packages.modules.c_tbd.m1_corpus
+
+    篩選條件從 pack.yaml 讀，不寫死在程式裡 —— 那份檔案才是模組的身分宣告，
+    兩邊各寫一份一定會走散。
+    """
+    import argparse
+
+    import yaml
+
+    ap = argparse.ArgumentParser(description="從共用語料切出模組 C 的那一份（S9）")
+    ap.add_argument("--corpus", type=Path, default=None, help="覆寫 CORPUS_PARQUET")
+    ap.add_argument("--out", type=Path, default=None, help="覆寫輸出路徑")
+    ap.add_argument(
+        "--tactic-only",
+        action="store_true",
+        help="不做平台交集，整個手法都收。語料太少時的退路，要寫進報告",
+    )
+    args = ap.parse_args()
+
+    pack = yaml.safe_load((MODULE_DIR / "pack.yaml").read_text(encoding="utf-8"))
+    labels = list(pack.get("labels_canon") or []) + list(pack.get("label_aliases") or [])
+    platform_terms = list(pack.get("platform_terms") or [])
+
+    print(f"手法標籤：{'、'.join(labels)}")
+    print(f"平台詞  ：{'、'.join(platform_terms)}")
+    print()
+
+    got = build_subset(
+        labels,
+        platform_terms,
+        source_path=args.corpus,
+        out_path=args.out,
+        platform_only=not args.tactic_only,
+    )
+
+    print(f"掃了           {got['scanned']:>8,} 筆")
+    print(f"手法命中       {got['total_cases']:>8,} 筆   <- pack.yaml 的 stats.total_cases")
+    print(f"平台交集       {got['platform_cases']:>8,} 筆   <- pack.yaml 的 stats.platform_cases")
+    print(f"實際寫出       {got['written']:>8,} 筆")
+
+    if got["total_cases"]:
+        ratio = got["platform_cases"] / got["total_cases"]
+        print(f"\n平台交集佔手法總數 {ratio:.1%}")
+        if ratio < 0.10:
+            print(
+                "[!]  比例偏低。165 沒有平台欄，平台只能從內文推斷 ——\n"
+                "     受害者寫「在網路上看到廣告」而沒寫臉書，這筆就撈不到。\n"
+                "     這多半是漏抓而不是真的稀少，要補 pack.yaml 的 platform_terms，\n"
+                "     或用 --tactic-only 收整個手法（但那等於放棄平台這一維，要寫進報告）。"
+            )
+
+    cases = load_local() if args.out is None else []
+    if cases:
+        print("\n分類覆蓋率：")
+        for key, (used, unused) in coverage(cases).items():
+            print(f"  {key:<9} 用到 {len(used):>2} 個：{'、'.join(used) or '（無）'}")
+            if unused:
+                print(f"  {'':<9} [!] 詞彙表有但語料沒有：{'、'.join(unused)}")
+        print(
+            "  [!] 那幾個「有詞彙表沒語料」的值，使用者問得出條件但會篩到 0 筆 ——\n"
+            "      那比抽不出條件更糟，因為它會保證回答「沒有」。"
+        )
+
+
+if __name__ == "__main__":
+    _main()

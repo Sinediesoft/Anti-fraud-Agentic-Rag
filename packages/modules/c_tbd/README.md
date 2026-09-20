@@ -36,7 +36,27 @@
 | `shared/facets.py` | `facets.py` | 🔴 `derive()` 從**驗證**改成**推斷**，見下 |
 | `shared/store.py` | `m3_retrieval.py::NumpyStore` | `Doc` → `Case`；保留增量索引與模型相容性檢查 |
 | `shared/retriever.py` | `m3_retrieval.py::Retriever` | `embed()` 改走 `shared.models`（規矩一） |
-| — | `tests/test_module_c.py` | 25 個測試 |
+| `tools/build_corpus.py::coverage()` | `m1_corpus.py::coverage()` | 幾乎照搬，見下 |
+| — | `m1_corpus.py::build_subset()` | 新寫的，不是移植 |
+| — | `tests/test_module_c.py` | 32 個測試 |
+
+### `ingest.py` 其實搬不動
+
+移植計畫原本列 `shared/ingest.py` → `m1_corpus.py`。實際動手後發現它**整支
+在解析 TOML 案例卡**，而本專案讀的是 165 的 parquet —— 格式不同，不是改
+輸入路徑就能用。所以 `build_subset()` 是新寫的。
+
+真正搬得動的是 `tools/build_corpus.py` 的 `coverage()`，而那是那支腳本
+最有價值的一段：**詞彙表裡有、語料裡沒有的值，使用者問得出過濾條件然後
+篩到 0 筆 —— 那比抽不出條件更糟，因為它會保證回答「沒有」。**
+
+### 切語料：為什麼回報兩個數字
+
+165 的六個欄位裡**沒有平台欄**，平台只能從內文推斷。所以 `build_subset()`
+同時回報「手法命中」與「平台交集」：只給後者會讓人以為「我的語料就這麼多」，
+實際上是「我認得出來的就這麼多」。比例低於 10% 會印警告。
+
+`--tactic-only` 是語料太少時的退路，但那等於放棄「平台 × 手法」這一維，要寫進報告。
 
 ### 🔴 移植時最大的轉折：`derive()` 的職責翻過來了
 
@@ -66,7 +86,6 @@
 
 | 來源 | 落點 | 卡在哪 |
 |---|---|---|
-| `shared/ingest.py` | `m1_corpus.py::build_subset()` | 等 #24 的 165 parquet 合併 |
 | `shared/knowledge.py::SYSTEM` | `m4_judgement.py` | 提示詞要配合 S13 的 12 則示範題重寫 |
 | `shared/chat_bot.py` | `m5_agent.py`（拆一半，生成那半刪掉） | 最大的一支，要等 M4 定案 |
 | `module.py::_actions()` | `playbook.yaml` | 從程式碼變成資料，補 `urgency` 欄位 |
@@ -100,9 +119,19 @@
    S12 要重量。
 2. **「放掉 min_score」有副作用。** 有過濾條件時會繞過分數門檻，而這個語料的
    詞彙表詞很常見（「投資」「廣告」「轉帳」），離題問句容易誤觸。
-3. **`numpy` 是未宣告的相依。** 目前靠 `streamlit` 的傳遞相依才裝得到，
-   不在 `requirements.txt` 裡。S3 的 `ml` extra 補上之前，沒裝 `--extra ui`
-   的人會 import 失敗。
+3. **`numpy` 與 `pyarrow` 是未宣告的相依。** 目前靠 `streamlit` 的傳遞相依才
+   裝得到，不在 `requirements.txt` 裡。S3 的 `ml` extra 補上之前，沒裝
+   `--extra ui` 的人會 import 失敗。`pyarrow` 走延遲 import（跟
+   `tools/fetch_corpus_165.py` 同一個做法），所以至少 import 模組不會炸。
+4. 🔴 **`target` 這一維在 165 語料上必然是空的。** 實測覆蓋率為 0 ——
+   受害者的第一人稱敘述幾乎不會自稱「投資人」「長者」「上班族」。
+
+   後果不是「少一個篩選維度」而已：使用者問「長者被騙的投資詐騙」時，
+   `parse_query()` **抽得出** `target=[長者]` 這個條件，然後篩到 0 筆，
+   系統就會回「沒有」—— 而使用者會把那句話讀成「沒有這種詐騙」。
+
+   兩個可能的處理方式，S12 決定：把 `target` 整個移出查詢側的 `TABLES`，
+   或改成只在有命中時才加條件。**不要留著現狀。**
 
 ## 七、這個資料夾只有 C 能改
 

@@ -17,7 +17,7 @@ from contracts import AnalyzeInput, Verdict
 
 from app.registry import load
 from packages.modules.c_tbd import facets
-from packages.modules.c_tbd.m1_corpus import Case
+from packages.modules.c_tbd.m1_corpus import Case, build_subset, coverage
 from packages.modules.c_tbd.m3_retrieval import (
     MODEL_READY,
     NumpyStore,
@@ -256,3 +256,114 @@ def test_篩選型問句篩得掉不相關的類型():
     hit_ids = [c.case_id for c in _cases() if facets.match(c.facets, f)]
     assert "C-002" not in hit_ids  # 假檢警，不該被撈到
     assert {"C-001", "C-003"} <= set(hit_ids)
+
+
+# ── 移植：M1 切語料 ─────────────────────────────────────────────────
+
+LABELS = ["假投資", "假投資詐騙"]
+PLATFORM = ["Facebook", "FB", "臉書", "粉專", "社團"]
+
+
+def _fixture_parquet(tmp_path):
+    """造一份跟 tools/fetch_corpus_165.py 產出結構相同的小 parquet。
+
+    欄位照 #24 的 FIELD_MAP：case_id / date / county / county_id / text / label / source
+    """
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+
+    rows = [
+        # 手法符合 × 有提到平台 —— 要收
+        ("1", "臉書投資廣告加LINE群組由老師帶單，加碼後平台無法出金。", "假投資"),
+        ("2", "於FB社團看到虛擬貨幣投資廣告，以USDT入金後無法提領。", "假投資"),
+        # 手法符合 × 沒提到平台 —— 漏抓的示範，計入 total 但不計入 platform
+        ("3", "朋友介紹一個投資平台說保證獲利，入金後才發現無法出金。", "假投資"),
+        # 手法不符 —— 不收。注意這筆有「臉書」，平台對但手法不對
+        ("4", "在臉書看到高薪打工的貼文，對方要我提供帳戶幫忙代收款項。", "人頭帳戶"),
+        ("5", "接到自稱地檢署檢察官來電，要求將存款轉入監管帳戶。", "假冒機構"),
+        # 太短 —— MIN_CHARS 濾掉
+        ("6", "被騙了", "假投資"),
+        # 重複 case_id —— 去重
+        ("1", "重複的那一筆。臉書投資廣告群組帶單出不了金。", "假投資"),
+    ]
+    data = {
+        "case_id": [r[0] for r in rows],
+        "text": [r[1] for r in rows],
+        "label": [r[2] for r in rows],
+        "date": ["2026-03-11"] * len(rows),
+        "county": ["臺北市"] * len(rows),
+        "county_id": ["63"] * len(rows),
+        "source": ["165"] * len(rows),
+    }
+    path = tmp_path / "corpus.parquet"
+    pq.write_table(pa.table(data), path, compression="zstd")
+    return path
+
+
+def test_切語料的四個數字各自算對(tmp_path):
+    got = build_subset(
+        LABELS,
+        PLATFORM,
+        source_path=_fixture_parquet(tmp_path),
+        out_path=tmp_path / "cases.jsonl",
+    )
+    assert got["scanned"] == 7
+    # total／platform 是**去重前**的計數，去重只在寫出時做。
+    # 這樣分是刻意的：那兩個數字要回答「語料裡有多少」，寫出數才是「我拿到多少」。
+    assert got["total_cases"] == 4  # 1、2、3 與重複的那筆（太短的已被濾掉）
+    assert got["platform_cases"] == 3  # 1、2、重複那筆（3 沒提到平台）
+    assert got["written"] == 2  # 去重後只剩 1、2
+
+
+def test_平台對但手法不對的不能收(tmp_path):
+    """那筆「在臉書看到高薪打工」是 E 的領域，只因為有「臉書」就收進來會很糟。"""
+    out = tmp_path / "cases.jsonl"
+    build_subset(LABELS, PLATFORM, source_path=_fixture_parquet(tmp_path), out_path=out)
+    assert "高薪打工" not in out.read_text(encoding="utf-8")
+
+
+def test_太短的敘述不收(tmp_path):
+    out = tmp_path / "cases.jsonl"
+    build_subset(LABELS, PLATFORM, source_path=_fixture_parquet(tmp_path), out_path=out)
+    assert "被騙了" not in out.read_text(encoding="utf-8")
+
+
+def test_手法總數與平台交集要分開回報(tmp_path):
+    """只給一個數字會讓人以為「我的語料就這麼多」，
+    但實際上是「我認得出來的就這麼多」—— 平台只能從內文推斷。"""
+    got = build_subset(
+        LABELS,
+        PLATFORM,
+        source_path=_fixture_parquet(tmp_path),
+        out_path=tmp_path / "cases.jsonl",
+    )
+    assert got["total_cases"] > got["platform_cases"]  # 有筆沒提到平台
+
+
+def test_退路模式收整個手法不做平台交集(tmp_path):
+    got = build_subset(
+        LABELS,
+        PLATFORM,
+        source_path=_fixture_parquet(tmp_path),
+        out_path=tmp_path / "cases.jsonl",
+        platform_only=False,
+    )
+    assert got["written"] == 3  # 多收了那筆沒提到平台的
+
+
+def test_找不到共用語料時的訊息要說得出去哪裡拿(tmp_path):
+    with pytest.raises(FileNotFoundError, match="fetch_corpus_165"):
+        build_subset(LABELS, PLATFORM, source_path=tmp_path / "不存在.parquet")
+
+
+def test_覆蓋率報得出詞彙表有但語料沒有的值():
+    """這比「抽不出條件」更糟：使用者問得出條件、然後篩到 0 筆，
+    而系統會保證回答「沒有」。
+
+    target 這一維在 165 語料上實測是 0 —— 受害者的第一人稱敘述幾乎不會
+    自稱「投資人」「長者」。這是真實缺口，不是測試資料造出來的。
+    """
+    cov = coverage(_cases())
+    used, unused = cov["target"]
+    assert used == []
+    assert unused  # 詞彙表列了十個，一個都沒用到
