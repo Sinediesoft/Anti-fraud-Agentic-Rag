@@ -16,6 +16,11 @@ def _module():
     return load("a_tbd").get("a_tbd").instance
 
 
+def _route_min() -> float:
+    """門檻從 pack.yaml 讀，不要寫死 —— S18 調校時那個值會動。"""
+    return load("a_tbd").get("a_tbd").pack.thresholds.route_min
+
+
 def test_四個進入點都回得出東西():
     m = _module()
     assert isinstance(m.can_handle(AnalyzeInput(text="被騙了")), float)
@@ -24,10 +29,19 @@ def test_四個進入點都回得出東西():
     assert m.health().module_id == "a_tbd"
 
 
-def test_組合未決定時不認領任何案子():
+def test_不是自己那類的案子不要亂搶():
+    """這條原本叫「組合未決定時不認領任何案子」，斷言 can_handle 一律回 0
+    —— 那是 platform / tactic 還空著的時代。2026-09-20 填上 LINE × 假投資
+    之後，真正要守的是「不亂搶」，不是「永遠回 0」。
+
+    第三句在 2026-09-21 補了手法詞「群組」（區辨力 +0.39）之後會拿到
+    0.20：它本來就是一句假投資的敘述，給非零分數是對的。重點是它沒說
+    平台，乘法把它壓在 route_min 之下 —— 停在那裡，讓外殼去問別人。
+    """
     m = _module()
-    for text in ["我在網路上買東西被騙", "群組裡的老師叫我先入金", "有人說我中獎了"]:
-        assert m.can_handle(AnalyzeInput(text=text)) == 0.0
+    assert m.can_handle(AnalyzeInput(text="我在網路上買東西被騙")) == 0.0
+    assert m.can_handle(AnalyzeInput(text="有人說我中獎了")) == 0.0
+    assert m.can_handle(AnalyzeInput(text="群組裡的老師叫我先入金")) < _route_min()
 
 
 def test_health_誠實說出還缺什麼():
@@ -52,6 +66,45 @@ def test_沒有模型也跑得完一次判讀(monkeypatch):
     assert verdict.disclaimer
     assert verdict.trace
     assert verdict.confidence.value == "low"
+
+
+def test_平台詞要卡字界不然online也算LINE():
+    """「line」是子字串，online / Online / ONLINE 都含有它。
+
+    2026-09-21 掃全部 194,355 筆共用語料：子字串比對命中 81,597 筆，
+    卡字界之後 81,327 筆 —— 那 270 筆是 online 之類的英文字誤判。
+    中文詞不受影響：「加賴」沒有 a-z 的字界概念，照樣比子字串。
+    """
+    from modules.a_tbd.module import _platform_hit
+
+    terms = ["LINE", "Line", "line", "加賴"]
+    for text in [
+        "我在LINE上被騙",
+        "line上有人找我",
+        "Line群組",
+        "LINE@官方帳號",
+        "加賴之後被拉進群組",
+    ]:
+        assert _platform_hit(terms, text) is True, text
+    for text in ["我在online購物網站被騙", "Online投資平台", "ONLINE遊戲點數", "deadline快到了"]:
+        assert _platform_hit(terms, text) is False, text
+
+
+def test_平台不對就不認領別人的案子():
+    """「平台 × 手法」是乘法不是加法。
+
+    加法那版（score + 0.15）讓手法詞夠多就能蓋過平台不符 —— 實測一個
+    臉書的案子在 A 這裡拿到 0.50，剛好等於 route_min，A 照樣認領。
+    這條守的就是那個：手法再像，平台不對就要掉到門檻下。
+    """
+    m = _module()
+    route_min = _route_min()
+    臉書案 = "我在臉書看到投資廣告，加了粉專客服，後來叫我入金，現在說要繳稅金才能出金"
+    line案 = "LINE 群組裡的老師叫我先入金才能出金，現在平台說要繳保證金才能提領"
+    assert m.can_handle(AnalyzeInput(text=臉書案)) < route_min
+    assert m.can_handle(AnalyzeInput(text=line案)) >= route_min
+    # 同一段手法敘述，只差平台 —— 分數必須拉得開
+    assert m.can_handle(AnalyzeInput(text=line案)) > m.can_handle(AnalyzeInput(text=臉書案))
 
 
 def test_prompt沒寫好時根本不呼叫模型(monkeypatch):
