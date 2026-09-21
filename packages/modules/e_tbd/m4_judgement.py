@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from contracts import CaseProfile, Confidence
 from shared import deid, models
 
+from . import threads_stages
+
 
 @dataclass
 class Judgement:
@@ -40,6 +42,10 @@ _PAYMENT_TERMS = {
 _DAYS = re.compile(r"(\d{1,3})\s*(?:天|日)")
 
 
+# 這個模組負責的手法，對應 threads_stages.PROFILES 的鍵
+THREADS_METHOD = "網路購物"
+
+
 def keyword_score(text: str, positive: list[str], negative: list[str]) -> float:
     """最笨的分類法，當及格線（baseline）。S13 要求比它相對進步 10% 以上。
 
@@ -59,15 +65,27 @@ def keyword_score(text: str, positive: list[str], negative: list[str]) -> float:
 
 
 def detect_stage(text: str, stages: list[dict]) -> str:
-    """從敘述判斷走到哪一步。
+    """從敘述判斷損失走到哪一步。
 
-    規則不是「命中最多的那一階段」，而是「有命中的階段裡走得最遠的那一個」——
-    playbook.yaml 的 stages 是照歷程順序寫的，所以取最後面那個。
+    主判定走 threads_stages.assess()——那是依 12,743 筆 Threads 案例全量統計
+    做出來的 12 階段流程，會分辨「第幾次付款」（大額損失幾乎都發生在第二次
+    之後），也會辨識決定性訊號（實名認證、索取驗證碼、遠端操作）。
 
-    受害者的敘述通常會把整段經過講完（「收到簡訊…後來匯了錢」），
+    回傳的是 Harm 的名稱小寫，對應 playbook.yaml 的 stage id。
+
+    cues 比對留作退路：assess() 只認得已做過流程分析的手法，
+    遇到沒分析過的手法時退回 playbook 的關鍵字。退路的規則是
+    「有命中的階段裡走得最遠的那一個」——受害者通常會把整段經過講完，
     命中最多的往往是最前面那一階段，那會低估他目前的處境。
-    判錯要往高風險的方向錯，不能往低風險的方向錯。
+    **判錯要往高風險的方向錯，不能往低風險的方向錯。**
     """
+    try:
+        assessment = threads_stages.assess(text, THREADS_METHOD)
+        if assessment.stages:  # 有命中任何流程階段才採信
+            return assessment.harm.name.lower()
+    except Exception:  # noqa: BLE001 —— 判讀壞掉要降級，不能讓整條流程掛掉
+        pass
+
     chosen = ""
     for stage in stages:
         if any(cue in text for cue in stage.get("cues", [])):

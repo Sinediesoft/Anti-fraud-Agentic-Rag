@@ -1,11 +1,16 @@
 """M1 語料處理：從全隊那份共用語料裡，把屬於自己的那幾千筆撈出來（S9）。
 
-模組 E 的做法：以標籤為主軸切，不靠平台篩。
+模組 E 的做法：平台 × 手法兩層篩選。
 
-理由是 2026-09-20 的實測：E 的三個候選標籤裡，只有「假求職」跟求職平台
-對得上（65%），「騙取金融帳戶」只有 4%、「假借銀行貸款」是 0%。
-硬套平台軸會切掉大量真實案例，所以這個模組收斂成「假求職詐騙」單一手法，
-不限平台 —— 跨平台是這個手法的本質（社群 61%、通訊軟體 62%）。
+  平台  起點在 Threads —— 12,743 筆（6.56%，平台排名第四）
+  手法  網路購物類 —— 其中 9,191 筆（72.1%），壓倒性第一
+
+平台用「起點」定義而不是「只出現這個平台」：Threads 關鍵字位置中位數 0.02、
+99.4% 落在案例前 20%，兩平台都出現時 99.5% 是 Threads 先出現。所以導流到
+LINE（57.2%）是後續環節，整條算這個模組，跟做 LINE 的組員不衝突。
+
+「脆」只收精確樣態。實測明確指 Threads 的只有 73 筆，而誤中（脆弱／乾脆／
+酥脆／清脆）有 1,167 筆 —— 直接收會引入 16 倍雜訊。
 
 語料來源不綁死單一來源。165 是主語料，但這支只認下面 Case 那個正規化後的
 形狀，任何來源只要能映射成它就能接進來。
@@ -38,6 +43,12 @@ FALLBACK_CORPUS = Path("data/cases_165.parquet")
 # 控制字元（不含 \t \n \r，那些交給下面的空白正規化）
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 MULTI_SPACE = re.compile(r"\s+")
+
+# 平台推導規則：起點在 Threads。
+# 中文字也算 \w，所以  邊界斷言在中文語境會失效；Rust regex 又不支援
+# lookaround，(?<!) 也不能用。因此改成直接列舉「脆」的精確樣態——
+# 明確指 Threads 的只有 73 筆，誤中（脆弱／乾脆／酥脆／清脆）有 1,167 筆。
+THREADS_PATTERN = r"(?i)threads|脆(上|裡|裏|的貼文)|(在|滑|用|玩|逛)脆|脆友"
 
 
 @dataclass
@@ -120,8 +131,8 @@ def build_subset(labels: list[str], platform_terms: list[str]) -> int:
     PR #24 把這種情形歸為「語意重複，要人判斷不能自動合併」—— 判斷的結果
     就記在 pack.yaml 的 label_aliases 裡，這裡照著用。
 
-    platform_terms 不參與篩選，只用來統計有多少筆提到求職管道 ——
-    那個數字填進 pack.yaml 的 stats.platform_cases。
+    平台篩選用 THREADS_PATTERN（模組層級常數），platform_terms 只用來統計，
+    不參與篩選 —— 兩者故意分開：規則要能被人工複核，詞表要能被調。
 
     回傳切出來的筆數。
     """
@@ -134,7 +145,9 @@ def build_subset(labels: list[str], platform_terms: list[str]) -> int:
     df = df.with_columns(
         pl.col("label").map_elements(normalize_label, return_dtype=pl.String).alias("_label_norm")
     )
-    subset = df.filter(pl.col("_label_norm").is_in(wanted))
+    # 兩層篩選：先平台（起點在 Threads）再手法（網路購物類）
+    on_platform = df.filter(pl.col("text").str.contains(THREADS_PATTERN))
+    subset = on_platform.filter(pl.col("_label_norm").is_in(wanted))
 
     LOCAL_CORPUS.parent.mkdir(parents=True, exist_ok=True)
     seen: set[str] = set()
@@ -173,10 +186,11 @@ def build_subset(labels: list[str], platform_terms: list[str]) -> int:
 
     pct = platform_hits / written * 100 if written else 0
     print(f"來源          {corpus}")
-    print(f"比對標籤      {wanted}")
-    print(f"標籤命中      {subset.height:,} 筆")
+    print(f"全量          {df.height:,} 筆")
+    print(f"起點在 Threads {on_platform.height:,} 筆")
+    print(f"其中網購類     {subset.height:,} 筆（{subset.height / on_platform.height * 100:.1f}%）")
     print(f"去重後        {written:,} 筆（重複 {subset.height - written:,}）")
-    print(f"提到求職管道  {platform_hits:,} 筆（{pct:.0f}%）")
+    print(f"平台詞命中     {platform_hits:,} 筆（{pct:.0f}%）")
     print(f"寫入          {LOCAL_CORPUS}")
     return written
 

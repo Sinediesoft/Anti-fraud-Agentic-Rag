@@ -23,6 +23,24 @@ from . import m1_corpus, m2_vision, m4_judgement, m5_agent
 
 MODULE_DIR = Path(__file__).resolve().parent
 
+# 決定性訊號：Threads 網購 vs 非 Threads 的 lift ≥ 6（2026-09-22 實測 5,000 筆）。
+# 這些是這一類特有的招牌話術——正規超商物流沒有「實名認證」這道手續，
+# 賣貨便／交貨便是 Threads 交易的主要管道。
+#
+# 為什麼要單獨加權：keyword_score 的飽和函式對所有詞一視同仁，
+# 命中 1 個 = 0.33、2 個 = 0.50。但「賣貨便」(lift 7.9) 跟「客服」(lift 2.8)
+# 的區分力差三倍，平等對待會讓「只提到一個強訊號」的短查詢落榜——
+# 而真實使用者的第一句話往往就只有那一個訊號。
+DECISIVE_TERMS = (
+    "實名認證",
+    "完成實名",
+    "未完成認證",
+    "認證失敗",
+    "賣貨便",
+    "交貨便",
+    "共享畫面",
+)
+
 
 class JobBoardMuleModule:
     """模組 E：求職平台 × 人頭帳戶。
@@ -57,6 +75,11 @@ class JobBoardMuleModule:
             positive=list(self.pack.route_terms) + list(self.pack.labels_canon),
             negative=list(self.pack.negative_terms),
         )
+        # 決定性訊號命中一個就拉到門檻之上，但**不蓋過負面詞的扣分**：
+        # 講「應徵工作對方要我實名認證」的人是隔壁模組的案子，不該被搶走。
+        if score > 0 or not any(t in text for t in self.pack.negative_terms):
+            if any(t in text for t in DECISIVE_TERMS):
+                score = max(score, 0.60)
         platform_hit = any(t and t in text for t in self.pack.platform_terms)
         # 平台對得上才加分 —— 這是「平台 × 手法」這個分法在路由上的具體表現
         return min(1.0, score + (0.15 if platform_hit else 0.0))
