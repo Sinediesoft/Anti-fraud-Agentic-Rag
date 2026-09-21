@@ -3,8 +3,11 @@
 # 五個人的 GitHub 帳號已填齊。動這份時記得同步更新 .github/CODEOWNERS ——
 # 兩份不一致的話，CODEOWNERS 的自動指派不會生效。
 #
-# TODO(S1)：還缺「負責組合」—— 五個人的 platform × tactic 都還是 TODO。
-#           題目沒定，五個模組就開不了工。
+# TODO(S1)：還缺「負責組合」—— D 已填，A／B／C／E 的 platform × tactic 還是 TODO。
+#           題目沒定，那四個模組就開不了工。
+#
+#           先填的人等於先佔位。撞題的話以這份為準來談，不要各自默默做到第五週
+#           才發現兩個人在切同一批語料。
 #
 # os 欄位不是裝飾：本隊是 1 台 macOS + 4 台 Windows，S3 選模型要看最低配那台，
 # S11 選 OCR 與 S16 指定展示機都依賴這份資料。
@@ -48,8 +51,11 @@ members:
     os: Windows
     gpu: GTX 1050 Ti / 4GB
     module_dir: packages/modules/d_tbd
-    platform: TODO-平台
-    tactic: TODO-詐騙手法
+    # 受害者是「正在進行一筆交易、被中途打斷」的買家或賣家（雙向都收）。
+    # 與隔壁的界線：網路購物的「東西沒寄到」歸別人，我只收「被引導去做金流動作」的；
+    # 寄提款卡給對方的歸 E。詳見 packages/modules/d_tbd/README.md
+    platform: 超商店到店物流
+    tactic: 假冒物流平台客服（實名認證話術）
     plan: paid
   - code: E
     github: c85016921920-design
