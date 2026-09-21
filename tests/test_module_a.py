@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import pytest
 from contracts import AnalyzeInput, Verdict
 from shared import models
 
@@ -169,6 +170,32 @@ def test_該撈到的還是要撈得到():
         hits = m3_retrieval.search(query, top_k=5)
         assert len(hits) == 5, query
         assert all(h.case_id for h in hits), "每一筆都要帶案例編號"
+
+
+def test_提到手法詞的案例要排在前面():
+    """第二道門檻的加分。
+
+    向量相似度只看「整段話像不像」，分不出「像是因為都在講投資」還是
+    「像是因為都在講出不了金」—— 而後者才是使用者問的那件事。
+
+    2026-09-21 實測「LINE 群組裡的老師叫我先入金才能出金」：只看相似度時
+    前 5 名沒有一筆同時提到「群組」與「出金」；加分之後前 5 名全部都有。
+    """
+    from modules.a_tbd import m3_retrieval
+
+    q = "LINE 群組裡的老師叫我先入金才能出金"
+    hits = m3_retrieval.search(q, top_k=5)
+    assert len(hits) == 5
+    # 加分是依比例給的：全中才加滿
+    assert m3_retrieval._tactic_bonus("提到群組也提到出金", ["群組", "出金"]) == pytest.approx(
+        m3_retrieval.TACTIC_BONUS
+    )
+    assert m3_retrieval._tactic_bonus("只提到群組", ["群組", "出金"]) == pytest.approx(
+        m3_retrieval.TACTIC_BONUS / 2
+    )
+    assert m3_retrieval._tactic_bonus("都沒提到", ["群組", "出金"]) == 0.0
+    # 問句沒有手法詞時不加分，否則長度不同的問句分數不能比
+    assert m3_retrieval._tactic_bonus("隨便什麼字", []) == 0.0
 
 
 def test_判讀過程一定先經過去識別化():

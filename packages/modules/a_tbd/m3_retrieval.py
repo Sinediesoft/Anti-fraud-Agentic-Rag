@@ -26,6 +26,17 @@ INDEX_DIR = MODULE_DIR / "index"
 # 向量層沒東西可排。留 top_k 的 4 倍當作可排序的餘裕。
 _MIN_POOL_AFTER_FILTER_FACTOR = 4
 
+# 第二道門檻的手法詞加分上限。
+#
+# 案例裡真的出現使用者打的那幾個手法詞時加分 —— 向量相似度看的是「整段話
+# 像不像」，它分不出「像是因為都在講投資」還是「像是因為都在講出不了金」。
+# 而後者才是使用者問的那件事。
+#
+# 全中（問句的手法詞案例裡都有）加滿 TACTIC_BONUS，半數就加一半，
+# 依比例給 —— 用比例而不是「每命中一個加 0.05」，是為了讓問句長短不影響
+# 加分的上限，否則打得越長的人分數被推得越高。
+TACTIC_BONUS = 0.15
+
 
 def _pack() -> PackSpec:
     return PackSpec.load(MODULE_DIR / "pack.yaml")
@@ -46,7 +57,15 @@ def _hits(terms: list[str], text: str) -> list[str]:
     return [t for t in terms if t in text]
 
 
-def _gate_keyword(query: str, pool: list[Case], top_k: int) -> list[Case] | None:
+def _tactic_bonus(text: str, q_tactic: list[str]) -> float:
+    """第二道門檻的加分：案例裡提到幾個問句的手法詞。"""
+    if not q_tactic:
+        return 0.0
+    hit = sum(1 for t in q_tactic if t in text)
+    return TACTIC_BONUS * hit / len(q_tactic)
+
+
+def _gate_keyword(query: str, pool: list[Case], top_k: int) -> tuple[list[Case], list[str]] | None:
     """第一道門檻：關鍵字。回 None 代表這題不該有答案。
 
     ① 問句一個平台詞、一個手法詞都沒命中 -> 回 None。
@@ -67,11 +86,11 @@ def _gate_keyword(query: str, pool: list[Case], top_k: int) -> list[Case] | None
         return None
 
     if not q_tactic:
-        return pool  # 只說了平台沒說手法 —— 篩不動，交給第二道門檻排序
+        return pool, []  # 只說了平台沒說手法 —— 篩不動，交給第二道門檻排序
     narrowed = [c for c in pool if any(t in c.text for t in q_tactic)]
     if len(narrowed) < top_k * _MIN_POOL_AFTER_FILTER_FACTOR:
-        return pool
-    return narrowed
+        return pool, q_tactic
+    return narrowed, q_tactic
 
 
 def _overlap_score(query: str, text: str) -> float:
@@ -158,24 +177,25 @@ def search(query: str, *, top_k: int = 5, cases: list[Case] | None = None) -> li
     gated = _gate_keyword(query, pool, top_k)
     if gated is None:
         return []
-    pool = gated
+    pool, q_tactic = gated
 
-    # ── 第二道門檻：現有的評分機制，原封不動 ────────────────────
-    # 第一層：向量檢索。沒有向量庫（還沒建、或模型叫不動）就退回字元重疊，
-    # 檢索不會因此整個失效 —— 只是變笨。
+    # ── 第二道門檻：相似度 + 手法詞加分 ─────────────────────────
+    # 底分還是向量相似度（沒有向量庫就退回字元重疊，檢索不會整個失效，
+    # 只是變笨），案例裡真的提到使用者打的手法詞就往上加。
+    #
+    # 為什麼要加這一層：向量相似度只看「整段話像不像」，分不出「像是因為
+    # 都在講投資」還是「像是因為都在講出不了金」—— 而後者才是使用者問的
+    # 那件事。加分把「真的講到同一件事」的案例往前推。
     by_id = _vector_scores(query, pool)
     if by_id is not None:
-        scored = sorted(
-            ((by_id.get(c.case_id, 0.0), c) for c in pool),
-            key=lambda pair: pair[0],
-            reverse=True,
-        )
+        base = {c.case_id: by_id.get(c.case_id, 0.0) for c in pool}
     else:
-        scored = sorted(
-            ((_overlap_score(query, c.text), c) for c in pool),
-            key=lambda pair: pair[0],
-            reverse=True,
-        )
+        base = {c.case_id: _overlap_score(query, c.text) for c in pool}
+    scored = sorted(
+        ((base[c.case_id] + _tactic_bonus(c.text, q_tactic), c) for c in pool),
+        key=lambda pair: pair[0],
+        reverse=True,
+    )
 
     out: list[SimilarCase] = []
     for score, case in scored[:top_k]:
