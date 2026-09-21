@@ -37,6 +37,46 @@ _MIN_POOL_AFTER_FILTER_FACTOR = 4
 # 加分的上限，否則打得越長的人分數被推得越高。
 TACTIC_BONUS = 0.15
 
+# 受災語彙：「我出事了」，但沒講到任何手法細節時用的詞。
+#
+# 為什麼需要這一組：光有平台詞不足以通過第一道門檻。「我在LINE上跟朋友
+# 聊天」有平台詞、沒有手法詞，2026-09-21 實測它會拿回 5 筆假投資案例
+# （底分 0.6674）—— 而那個分數比一個真正相關的查詢的第 2～5 名還高。
+#
+# 底分擋不住它：A 的語料整池都是 LINE 假投資，任何提到 LINE 的中文句子跟
+# 整池的距離都差不多。實測純聊天 0.6140～0.6674、真受害者 0.7466、相關
+# 查詢 0.6829，三組重疊，任何底分門檻都會連真的一起砍掉。
+#
+# 但「我在LINE上被騙了三萬元」要留住 —— 那是真的受害者，他只是還講不出
+# 手法。所以另外收一組「出事了」的詞，跟 route_terms 分開：
+# route_terms 回答的是「這像不像我這一類」（路由用，有區辨力數字），
+# 這一組回答的是「這個人是不是來求助的」（檢索用）。
+#
+# ⚠️ 這份清單是判斷來的，不像 route_terms 有量過。
+# TODO(S12)：20 題考題出來之後用它們校，特別是不含專有名詞的那 8 題。
+# 🔴 只收「錢出事了」的詞，不收泛用的求助詞。
+#    第一版收了「怎麼辦」跟「求助」，結果「我家的貓不吃飯了怎麼辦」照樣
+#    拿回 5 筆假投資案例 —— 泛用求助詞不是受災訊號，是句型。
+DISTRESS_TERMS = (
+    "被騙",
+    "受騙",
+    "詐騙",
+    "詐欺",
+    "上當",
+    "匯款",
+    "匯了",
+    "轉帳",
+    "入金",
+    "儲值",
+    "拿不回",
+    "要不回",
+    "領不出",
+    "提不出",
+    "凍結",
+    "報案",
+    "165",
+)
+
 
 def _pack() -> PackSpec:
     return PackSpec.load(MODULE_DIR / "pack.yaml")
@@ -79,14 +119,24 @@ def _gate_keyword(query: str, pool: list[Case], top_k: int) -> tuple[list[Case],
 
     ③ 篩完太少就不篩（見 _MIN_POOL_AFTER_FILTER_FACTOR）。
     """
-    platform, tactic = _keywords()
-    q_platform = _hits(platform, query)
+    # 平台詞不再參與這道門檻 —— 「這題是不是 LINE 的案子」是路由（can_handle）
+    # 的工作，檢索是路由決定交給 A 之後才跑的。這裡只問「他在講什麼事」。
+    _platform, tactic = _keywords()
     q_tactic = _hits(tactic, query)
-    if not q_platform and not q_tactic:
+    q_distress = _hits(list(DISTRESS_TERMS), query)
+
+    # 手法詞或受災語彙，兩者至少要有一個。
+    #
+    # 平台詞單獨不算：「我在LINE上跟朋友聊天」有平台詞但沒出事，正確答案
+    # 是「沒有」。這一條是 2026-09-21 補的 —— 原本只要有平台詞就放行，
+    # 純聊天會拿回 5 筆假投資案例。
+    if not q_tactic and not q_distress:
         return None
 
     if not q_tactic:
-        return pool, []  # 只說了平台沒說手法 —— 篩不動，交給第二道門檻排序
+        # 出事了但講不出手法（「我在LINE上被騙了三萬元」）—— 篩不動語料池，
+        # 交給第二道門檻排序。這種人最需要看到相似案例。
+        return pool, []
     narrowed = [c for c in pool if any(t in c.text for t in q_tactic)]
     if len(narrowed) < top_k * _MIN_POOL_AFTER_FILTER_FACTOR:
         return pool, q_tactic
