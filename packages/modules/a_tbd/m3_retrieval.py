@@ -11,12 +11,67 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from contracts import SimilarCase
+from contracts import PackSpec, SimilarCase
 from shared import deid, models
 
 from .m1_corpus import Case, load_local
 
-INDEX_DIR = Path(__file__).resolve().parent / "index"
+MODULE_DIR = Path(__file__).resolve().parent
+INDEX_DIR = MODULE_DIR / "index"
+
+# 語料池被關鍵字篩到比這個數還少時就不篩了。
+#
+# 篩選是為了把不相干的案例擋在向量比對之外，不是為了把召回砍光 —— 問句用的
+# 詞剛好在語料裡很罕見時（例如只打了「穩賺不賠」，覆蓋 20.3%），硬篩會讓
+# 向量層沒東西可排。留 top_k 的 4 倍當作可排序的餘裕。
+_MIN_POOL_AFTER_FILTER_FACTOR = 4
+
+
+def _pack() -> PackSpec:
+    return PackSpec.load(MODULE_DIR / "pack.yaml")
+
+
+def _keywords() -> tuple[list[str], list[str]]:
+    """回傳（平台詞，手法詞）。手法詞含 route_terms 與官方標籤用語。
+
+    分開回傳是因為兩者在第一道門檻的職責不同，見 _gate_keyword()。
+    """
+    pack = _pack()
+    platform = [t for t in pack.platform_terms if t]
+    tactic = [t for t in list(pack.route_terms) + list(pack.labels_canon) if t]
+    return platform, tactic
+
+
+def _hits(terms: list[str], text: str) -> list[str]:
+    return [t for t in terms if t in text]
+
+
+def _gate_keyword(query: str, pool: list[Case], top_k: int) -> list[Case] | None:
+    """第一道門檻：關鍵字。回 None 代表這題不該有答案。
+
+    ① 問句一個平台詞、一個手法詞都沒命中 -> 回 None。
+       擋的是「今天天氣如何」「我家的貓不吃飯」這種 —— 2026-09-21 實測，
+       在沒有這道門檻的版本裡它們一樣拿回滿滿 5 筆案例，每一筆都帶著案例
+       編號與縣市，看起來跟真的一模一樣。那比查不到更糟。
+
+    ② 用問句命中的**手法詞**篩語料池。
+       平台詞刻意不參與篩選：M1 切語料時就是用平台詞篩出來的，這 1,000 筆
+       100% 都含平台詞（實測），拿它篩等於沒篩。
+
+    ③ 篩完太少就不篩（見 _MIN_POOL_AFTER_FILTER_FACTOR）。
+    """
+    platform, tactic = _keywords()
+    q_platform = _hits(platform, query)
+    q_tactic = _hits(tactic, query)
+    if not q_platform and not q_tactic:
+        return None
+
+    if not q_tactic:
+        return pool  # 只說了平台沒說手法 —— 篩不動，交給第二道門檻排序
+    narrowed = [c for c in pool if any(t in c.text for t in q_tactic)]
+    if len(narrowed) < top_k * _MIN_POOL_AFTER_FILTER_FACTOR:
+        return pool
+    return narrowed
 
 
 def _overlap_score(query: str, text: str) -> float:
@@ -97,6 +152,15 @@ def search(query: str, *, top_k: int = 5, cases: list[Case] | None = None) -> li
     if not pool:
         return []
 
+    # ── 第一道門檻：關鍵字 ──────────────────────────────────────
+    # 問句跟這個模組的平台 × 手法完全沾不上邊時，正確答案是「沒有」，
+    # 不是「最接近的五筆」。
+    gated = _gate_keyword(query, pool, top_k)
+    if gated is None:
+        return []
+    pool = gated
+
+    # ── 第二道門檻：現有的評分機制，原封不動 ────────────────────
     # 第一層：向量檢索。沒有向量庫（還沒建、或模型叫不動）就退回字元重疊，
     # 檢索不會因此整個失效 —— 只是變笨。
     by_id = _vector_scores(query, pool)

@@ -131,6 +131,46 @@ def test_走規則抽取時信心一定標低():
     assert verdict.confidence.value == "low"
 
 
+def test_離題的問句不該拿回任何案例():
+    """第一道門檻（關鍵字）守的就是這個。
+
+    2026-09-21 實測，沒有這道門檻時「請問今天天氣如何」會拿回滿滿 5 筆
+    假投資案例（分數 0.43～0.50），每一筆都帶著案例編號、日期與縣市 ——
+    看起來跟真的一模一樣。那比查不到更糟：使用者沒辦法分辨。
+
+    向量相似度本身擋不住，因為 bge-m3 算中文幾乎不可能給出 <= 0 的分數，
+    而原本第二道門檻只有 `score <= 0 就丟掉`。
+    """
+    from modules.a_tbd import m3_retrieval
+
+    for query in [
+        "我明天要去菜市場買水果",
+        "請問今天天氣如何",
+        "請問台北車站怎麼走",
+        "我家的貓不吃飯了怎麼辦",
+        "對方叫我去超商買遊戲點數然後拍序號",  # 別人的手法，不是我這類
+    ]:
+        assert m3_retrieval.search(query, top_k=5) == [], query
+
+
+def test_該撈到的還是要撈得到():
+    """第一道門檻的反面 —— 擋掉離題很容易順手把相關的也擋掉。
+
+    第二句刻意不說平台：那是這個專案的起點題（「群組裡的老師叫我先入金
+    才能出金」在官方站台 0 筆命中），無論如何都要找得到。
+    """
+    from modules.a_tbd import m3_retrieval
+
+    for query in [
+        "LINE 群組裡的老師叫我先入金才能出金",
+        "群組裡的老師叫我先入金才能出金",
+        "line上有人找我投資，說保證獲利",
+    ]:
+        hits = m3_retrieval.search(query, top_k=5)
+        assert len(hits) == 5, query
+        assert all(h.case_id for h in hits), "每一筆都要帶案例編號"
+
+
 def test_判讀過程一定先經過去識別化():
     verdict = _module().analyze(AnalyzeInput(text="我手機0912345678，匯了五萬"))
     steps = [e.step for e in verdict.trace]
