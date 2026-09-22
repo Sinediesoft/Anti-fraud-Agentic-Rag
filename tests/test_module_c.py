@@ -14,6 +14,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
 
 import pytest
 from contracts import AnalyzeInput, SimilarCase, Verdict
@@ -26,6 +31,7 @@ from packages.modules.c_tbd.m3_retrieval import (
     MODEL_READY,
     NumpyStore,
     Retriever,
+    _import_numpy,
     search,
 )
 
@@ -273,6 +279,57 @@ def test_沒裝套件的人查詢要退到關鍵字而不是看到例外():
     的組員一查詢就炸，而不是安靜地用關鍵字檢索。"""
     hits = search("我在臉書看到投資廣告", cases=_cases())
     assert hits  # 不管第 1 層成不成功，都一定要有結果
+
+
+# ── 沒裝 numpy 的機器（= CI，= 照 README 跑 make install 的人）─────────────
+#
+# 🔴 這兩條測試在「裝了 ml 那組」的機器上必須也能失敗，否則它們什麼都沒測到。
+#    numpy 不是被宣告的相依，是 ml 那組的 torch 順便帶進來的 —— 所以作者本機
+#    永遠是綠的，紅燈只長在 CI 上。兩條都自己把 numpy 擋掉，不靠環境剛好沒裝。
+
+
+def test_沒裝numpy的機器也要import得進來():
+    """CI 掛的就是這件事：numpy 放在模組層，pytest 在**收集階段**就炸。
+
+    收集階段的失敗會讓 pytest 直接 Interrupted —— 不只這個檔案，整包測試
+    一條都不會跑。所以這條測的不是「檢索算得對不對」，而是「import 得進來」。
+
+    要開子行程，因為本行程早就把這個模組 import 進來了，測不到 import 本身。
+    """
+    root = Path(__file__).resolve().parent.parent
+    code = textwrap.dedent(
+        """
+        import sys
+
+        # sys.modules 裡放 None，之後 import numpy 就會丟 ImportError。
+        # 比動 meta_path 短，效果一樣。
+        sys.modules["numpy"] = None
+
+        from packages.modules.c_tbd import m3_retrieval  # noqa: F401
+        """
+    )
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(root), str(root / "packages")])}
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, env=env, cwd=root
+    )
+    assert done.returncode == 0, f"沒裝 numpy 就 import 不進來：{done.stderr}"
+
+
+def test_缺numpy要叫人去裝extra而不是丟ModuleNotFoundError(monkeypatch):
+    """少裝套件要走 ModelDependencyError，這樣 search() 現成那道 except 才接得住。
+
+    順序很重要：_build_store() 先 new 一個 NumpyStore（__init__ 就要 numpy），
+    才輪到 embed() 去丟 ModelDependencyError。所以光把 import 搬進函式還不夠 ——
+    ModuleNotFoundError 不在 search() 接的那組例外裡，會直接炸到使用者面前。
+    """
+    monkeypatch.setitem(sys.modules, "numpy", None)
+
+    with pytest.raises(models.ModelDependencyError) as caught:
+        _import_numpy()
+    assert "extra ml" in str(caught.value)  # 訊息要講得出下一步
+
+    # 而且整條查詢路徑要照常退到第 3 層，不是炸掉
+    assert search("我在臉書看到投資廣告", cases=_cases())
 
 
 def test_搜尋得到而且每筆都帶得出出處():
