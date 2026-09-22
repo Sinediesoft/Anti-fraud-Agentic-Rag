@@ -1,0 +1,61 @@
+{
+  "rater": "rater1_recheck",
+  "labels": [
+    {
+      "case_id": "161315343959068698",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "300556224804425740",
+      "stage": "drained"
+    },
+    {
+      "case_id": "288259722820194311",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "290731399189631022",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "330254740036259862",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "272612758757838854",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "195443581228421121",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "254524157683830824",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "305228019356667915",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "251560424091160576",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "249093010241884161",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "292964587521708055",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "300876924874395678",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "200828553170784259",
+      "stage": "credentials"
+    }
+  ]
+}
