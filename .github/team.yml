@@ -5,9 +5,14 @@
 #
 # 「負責組合」的來源一律是各自 pack.yaml 的 platform / tactic ——
 # 這份只是彙總，兩邊不一致時以 pack.yaml 為準（那是程式真正讀的那份）。
+# 例外：D 還沒有 pack.yaml（d_tbd/ 目前只有 README.md），那一列的值出自
+# PR #39 的宣告。
 #
-# 2026-09-22 對齊：A、C 已從 repo 內的 pack.yaml 填入；D、E 的題目已宣告
-# 但還在 PR 裡，合併後要回來把 TODO 換掉（下面各自標了 PR 編號）。
+# 先填的人等於先佔位。撞題的話以這份為準來談，不要各自默默做到第五週
+# 才發現兩個人在切同一批語料。
+#
+# 2026-09-22 對齊：A、C 從各自 pack.yaml 填入；D（PR #39）、E（PR #41）
+# 合併後也填上了。
 # TODO(S1)：B 的題目還沒宣告 —— 五個人裡只剩這一欄是空的。
 #
 # os 欄位不是裝飾：本隊是 1 台 macOS + 4 台 Windows，S3 選模型要看最低配那台，
@@ -52,8 +57,11 @@ members:
     os: Windows
     gpu: GTX 1050 Ti / 4GB
     module_dir: packages/modules/d_tbd
-    platform: TODO-待PR39         # 已宣告「超商物流 × 假冒客服」，PR #39 合併後改掉
-    tactic: TODO-待PR39
+    # 受害者是「正在進行一筆交易、被中途打斷」的買家或賣家（雙向都收）。
+    # 與隔壁的界線：網路購物的「東西沒寄到」歸別人，我只收「被引導去做金流動作」的；
+    # 寄提款卡給對方的歸 E。詳見 packages/modules/d_tbd/README.md
+    platform: 超商店到店物流
+    tactic: 假冒物流平台客服（實名認證話術）
     plan: paid
   - code: E
     github: c85016921920-design
@@ -61,9 +69,11 @@ members:
     os: Windows
     gpu: RTX 5070 Ti / 16GB
     module_dir: packages/modules/e_tbd
-    platform: TODO-待PR41         # repo 內現況是「求職平台 × 人頭帳戶」，但 PR #41
-    tactic: TODO-待PR41           # 要改成「Threads × 網路購物詐騙」。等合併再填，
-                                  # 免得這份跟 pack.yaml 對不上
+    # PR #41 把題目從「求職平台 × 人頭帳戶」改成這組。平台用「起點」定義：
+    # Threads 案例有 57.2% 會導流到 LINE，但 99.5% 是 Threads 先出現，所以
+    # 整條算 E；起點在 LINE 的（例如群組假投資）歸 A。
+    platform: Threads
+    tactic: 網路購物詐騙
     plan: paid
 
 # S16/S22 的展示機：那台要裝得起全部五個模組的依賴，W5 結束前先試裝一次
