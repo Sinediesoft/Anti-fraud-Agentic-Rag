@@ -108,6 +108,46 @@ def test_平台不對就不認領別人的案子():
     assert m.can_handle(AnalyzeInput(text=line案)) > m.can_handle(AnalyzeInput(text=臉書案))
 
 
+def test_沒提平台不等於平台不符():
+    """平台判定是三態，不是兩態。
+
+    2026-09-22 之前只有兩態：有我的平台詞乘 1.3，其餘一律乘 0.6。那把
+    「沒提任何平台」跟「提到別人的平台」當成同一件事 —— 前者是資訊不足，
+    後者是證據指向別人，倒扣的理由只對後者成立。
+
+    代價量得出來：20 題考題裡 10 題不含平台詞的（受害者真實的打字方式）
+    在兩態下全軍覆沒（10/20），三態之後 19/20。本專案的起點例句
+    「群組裡的老師叫我先入金才能出金」從 0.30 變成 0.50。
+
+    這條守的是三態各自的係數，以及「中性不等於放寬」—— 手法詞仍然要
+    自己掙到 2 個命中才過門檻。
+    """
+    from modules.a_tbd.module import (
+        PLATFORM_HIT,
+        PLATFORM_MISS,
+        PLATFORM_NEUTRAL,
+        _platform_factor,
+    )
+
+    terms = ["LINE", "Line", "line", "加賴"]
+    assert _platform_factor(terms, "我在 LINE 群組被拉進投資") == PLATFORM_HIT
+    assert _platform_factor(terms, "我在臉書看到投資廣告") == PLATFORM_MISS
+    assert _platform_factor(terms, "群組裡的老師叫我入金") == PLATFORM_NEUTRAL
+
+    # 兩邊都出現時算自己的。A 的 17,764 筆是「假投資 ∩ 提得到 LINE」切出來的，
+    # 而這一類的典型歷程就是別處看廣告、再被導進 LINE 談 —— 若「有別人的
+    # 平台」就打折，A 會把自己語料的大半判成不是自己的。
+    assert _platform_factor(terms, "臉書看到廣告後加對方LINE進投資群組") == PLATFORM_HIT
+
+    m = _module()
+    route_min = _route_min()
+    # 中性不是放寬：1 個命中（0.3333）照樣不過門檻
+    assert m.can_handle(AnalyzeInput(text="群組裡有人找我")) < route_min
+    # 別人的平台 + 我的手法詞，折扣要壓得住 —— 這是三態化最該守住的一邊
+    臉書但手法像 = "我在臉書看到投資廣告，對方說保證獲利，現在出金失敗"
+    assert m.can_handle(AnalyzeInput(text=臉書但手法像)) < route_min
+
+
 def test_prompt沒寫好時根本不呼叫模型(monkeypatch):
     """S13 的 prompt 還沒寫，那就不該去打擾模型。
 
