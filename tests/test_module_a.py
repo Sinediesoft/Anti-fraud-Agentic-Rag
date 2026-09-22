@@ -219,6 +219,40 @@ def test_提到手法詞的案例要排在前面():
     assert m3_retrieval._tactic_bonus("隨便什麼字", []) == 0.0
 
 
+def test_讀得回帶有U2028的語料(tmp_path, monkeypatch):
+    """回歸測試：165 的真實敘述裡有 U+2028 LINE SEPARATOR。
+
+    json.dumps(ensure_ascii=False) **不跳脫** U+2028／U+2029／U+0085，
+    但 str.splitlines() 會在它們上面斷行 —— 一筆合法的 JSONL 被切成兩半，
+    讀回來就是 JSONDecodeError: Unterminated string。
+
+    2026-09-21 切到全量 17,764 筆時當場踩到（裡面有 2 個 U+2028），
+    make index 掛在 health()。抽樣的 1,000 筆裡沒有，所以之前看不到 ——
+    自己造的測試資料也永遠碰不到，所以這條要明寫。
+
+    模組 C 在 b6387a8 就踩過同一個坑（10,051 筆裡有 2 個）。
+    """
+    import json
+
+    from modules.a_tbd import m1_corpus
+
+    path = tmp_path / "cases.jsonl"
+    monkeypatch.setattr(m1_corpus, "LOCAL_CORPUS", path)
+    row = {
+        "case_id": "A-1",
+        "text": f"前半段{chr(0x2028)}後半段，中間那個是 LINE SEPARATOR。",
+        "source": "165",
+        "label": "假投資詐騙",
+        "date": "",
+        "county": "",
+    }
+    path.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    cases = m1_corpus.load_local()
+    assert len(cases) == 1, "U+2028 把一筆語料切成兩半了"
+    assert chr(0x2028) in cases[0].text
+
+
 def test_判讀過程一定先經過去識別化():
     verdict = _module().analyze(AnalyzeInput(text="我手機0912345678，匯了五萬"))
     steps = [e.step for e in verdict.trace]

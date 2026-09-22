@@ -118,6 +118,12 @@ deliverables:
   playbook: playbook.yaml
   report: REPORT.md
 
+# 2026-09-21 在 194,355 筆共用語料上實測（正規化標籤後比對）。
+# 重抓語料或改 labels_canon／platform_terms 之後要重跑 M1 並更新這兩個數字。
 stats:
-  total_cases: null       # TODO(S9)：這個手法總共幾筆
-  platform_cases: null    # TODO(S9)：其中在我的平台上的幾筆（門檻 2,000 筆）
+  total_cases: 30778      # 假投資系列標籤，不分平台
+  platform_cases: 17764   # 其中內文提得到 LINE 的（門檻 2,000 筆，遠超過）
+  # 對照：內文提到 LINE 的案子全部有 81,597 筆，但其中 63,808 筆不是假投資
+  # （網路購物 11,300、假交友投資 7,108、假買家 5,826…）—— 詐騙幾乎都在
+  # LINE 上談，所以平台單獨不構成分工，這也是 can_handle 把平台當乘法而
+  # 不是加分的同一個道理。

@@ -50,7 +50,21 @@ def load_local() -> list[Case]:
     if not LOCAL_CORPUS.exists():
         return []
     cases: list[Case] = []
-    for line in LOCAL_CORPUS.read_text(encoding="utf-8").splitlines():
+    # 🔴 一定要用 split("\n")，不能用 splitlines()。
+    #
+    # json.dumps(ensure_ascii=False) 只跳脫 \n \r \t " \\ 與 0x20 以下的控制字元，
+    # **不跳脫** U+2028 LINE SEPARATOR、U+2029 PARAGRAPH SEPARATOR、U+0085 NEL。
+    # 但 str.splitlines() 會在這三個上面斷行 —— 一筆合法的 JSONL 被切成兩半，
+    # 讀回來就是 JSONDecodeError: Unterminated string。
+    #
+    # 2026-09-21 切到全量 17,764 筆時當場踩到：裡面有 2 個 U+2028，
+    # splitlines() 數出 17,766 行、split("\n") 數出 17,764 行，
+    # make index 直接掛在 health()。抽樣的 1,000 筆裡沒有，所以之前看不到。
+    #
+    # 模組 C 在 b6387a8 就踩過同一個坑並記了下來（10,051 筆裡有 2 個），
+    # 但那是他的資料夾，這邊沒跟著改。受害者的自由敘述什麼字元都有，
+    # 用自己造的測試資料永遠碰不到這個。
+    for line in LOCAL_CORPUS.read_text(encoding="utf-8").split("\n"):
         if not line.strip():
             continue
         raw = json.loads(line)
