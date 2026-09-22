@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -49,7 +50,21 @@ def load_local() -> list[Case]:
     if not LOCAL_CORPUS.exists():
         return []
     cases: list[Case] = []
-    for line in LOCAL_CORPUS.read_text(encoding="utf-8").splitlines():
+    # 🔴 一定要用 split("\n")，不能用 splitlines()。
+    #
+    # json.dumps(ensure_ascii=False) 只跳脫 \n \r \t " \\ 與 0x20 以下的控制字元，
+    # **不跳脫** U+2028 LINE SEPARATOR、U+2029 PARAGRAPH SEPARATOR、U+0085 NEL。
+    # 但 str.splitlines() 會在這三個上面斷行 —— 一筆合法的 JSONL 被切成兩半，
+    # 讀回來就是 JSONDecodeError: Unterminated string。
+    #
+    # 2026-09-21 切到全量 17,764 筆時當場踩到：裡面有 2 個 U+2028，
+    # splitlines() 數出 17,766 行、split("\n") 數出 17,764 行，
+    # make index 直接掛在 health()。抽樣的 1,000 筆裡沒有，所以之前看不到。
+    #
+    # 模組 C 在 b6387a8 就踩過同一個坑並記了下來（10,051 筆裡有 2 個），
+    # 但那是他的資料夾，這邊沒跟著改。受害者的自由敘述什麼字元都有，
+    # 用自己造的測試資料永遠碰不到這個。
+    for line in LOCAL_CORPUS.read_text(encoding="utf-8").split("\n"):
         if not line.strip():
             continue
         raw = json.loads(line)
@@ -66,18 +81,67 @@ def load_local() -> list[Case]:
     return cases
 
 
-def build_subset(labels: list[str], platform_terms: list[str]) -> int:
+def norm_label(s: str) -> str:
+    """標籤正規化。165 的官方標籤有前後空白與全形括號的變體 ——
+    實測 50 組只差這些字元就會被當成不同類，涉及 191 種原始寫法。"""
+    return re.sub(r"[\s\u3000]+", "", s).replace("（", "(").replace("）", ")")
+
+
+def matches_platform(text: str, platform_terms: list[str]) -> bool:
+    """平台是從內文推斷的 —— 165 沒有平台欄位。
+
+    關鍵詞一律不分大小寫比對：實測 LINE / Line / line 三種寫法都有人用，
+    只認大寫會漏掉 7,182 筆。
+    """
+    lo = text.lower()
+    return any(term.lower() in lo for term in platform_terms)
+
+
+def build_subset(labels: list[str], platform_terms: list[str], *, limit: int = 0) -> int:
     """從共用語料切出自己的那一份，寫進 data/cases.jsonl。
 
-    TODO(S9)：接上 polars 讀 parquet、接上 CKIP 斷詞、把清理規則寫完整。
-    現在只有骨架 —— 這支要能重現產出自己的資料檔才算做完 S9。
+    兩道篩選：標籤要在 labels 裡（正規化後比對），內文要命中平台關鍵詞。
+    limit > 0 時只取前幾筆 —— 建索引很貴，展示用抽樣就夠。
+
+    TODO(S9)：接上 CKIP 斷詞、把清理規則寫完整。目前沒有做斷詞，
+    tokens 留空，檢索靠嵌入模型自己處理。
     """
     if not SHARED_CORPUS.exists():
         raise FileNotFoundError(
             f"找不到共用語料 {SHARED_CORPUS}。語料放共用雲端硬碟，"
             f"路徑用環境變數 CORPUS_PARQUET 指定（見 data/README.md）。"
         )
-    raise NotImplementedError("S9 的工作：寫完篩選、清理、斷詞，並把統計填進 pack.yaml")
+
+    import pyarrow.parquet as pq
+
+    wanted = {norm_label(x) for x in labels}
+    rows = pq.read_table(SHARED_CORPUS).to_pylist()
+
+    kept: list[dict] = []
+    for r in rows:
+        if norm_label(r.get("label", "")) not in wanted:
+            continue
+        text = r.get("text", "") or ""
+        if not matches_platform(text, platform_terms):
+            continue
+        kept.append(
+            {
+                "case_id": str(r.get("case_id", "")),
+                "source": r.get("source", "165"),
+                "text": text,
+                "label": r.get("label", ""),
+                "date": r.get("date", ""),
+                "county": r.get("county", ""),
+            }
+        )
+        if limit and len(kept) >= limit:
+            break
+
+    LOCAL_CORPUS.parent.mkdir(parents=True, exist_ok=True)
+    with LOCAL_CORPUS.open("w", encoding="utf-8") as f:
+        for rec in kept:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    return len(kept)
 
 
 def stats(cases: list[Case]) -> dict[str, int]:

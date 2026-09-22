@@ -41,7 +41,7 @@ _DAYS = re.compile(r"(\d{1,3})\s*(?:天|日)")
 
 # S13 把 prompt、12 則示範題與 grammar 約束寫好之後改成 True。
 # 在那之前不呼叫模型 —— 送一個空 prompt 過去再把回覆丟掉，只會浪費時間
-# 並讓 confidence 說謊。模組 C 在 c60b03c 用同一個旗標處理了同一段程式碼。
+# 並讓 confidence 說謊。
 _SLM_PROMPT_READY = False
 
 
@@ -125,20 +125,20 @@ def judge(
     notes: list[str] = []
     confidence = Confidence.MEDIUM
 
-    # 第一層 + 第二層：讓地端小模型照格式吐。模型不可用時落到第三層。
+    # 第一層 + 第二層：讓地端小模型照格式吐。S13 的 prompt 還沒寫，所以現在
+    # 每次都走第三層 —— 而那正是退路要能被證明會啟動的意思。
     #
-    # 🔴 這裡原本是：
+    # 🔴 這裡原本長這樣（範本帶來的，模組 A 與 B/D/E 現在也還是）：
     #
     #       models.call_slm("", grammar=None)   # 送空字串、回傳值丟掉
     #       break
     #
-    #   call_slm() 還會 raise 的年代這沒差。它在 2026-09-20 接上 Ollama 之後
-    #   有兩個問題：每次判讀白等一次 Ollama 冷載入（2026-09-21 實測 788 ms，
-    #   UI 的執行紀錄上量到 1546 ms），而模型收到空字串也只會回空字串；
-    #   更糟的是「沒拋例外」就 break，confidence 停在 MEDIUM —— 但 profile
-    #   其實是下面那三行規則硬抽的，等於對使用者謊報信心。
+    #   call_slm() 還會 raise 的年代這沒差。它接上 Ollama 之後就有兩個問題：
+    #   每次判讀白送一個空 prompt 給模型（暖機後 0.6 秒、冷啟動 8 秒），
+    #   而且 confidence 會停在 MEDIUM —— 但 profile 仍然是下面規則硬抽的，
+    #   等於對使用者謊報信心。模組 A 的測試就是這樣紅的。
     #
-    #   所以 prompt 真的寫出來之前不呼叫模型，並誠實標記信心低。
+    #   所以在 prompt 真的寫出來之前，這裡不呼叫模型，並誠實標記信心低。
     #   S13 補 prompt 時把 _SLM_PROMPT_READY 打開，兩層重試就會接上。
     if _SLM_PROMPT_READY:
         for attempt in range(2):
