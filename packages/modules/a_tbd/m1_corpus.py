@@ -50,7 +50,21 @@ def load_local() -> list[Case]:
     if not LOCAL_CORPUS.exists():
         return []
     cases: list[Case] = []
-    for line in LOCAL_CORPUS.read_text(encoding="utf-8").splitlines():
+    # 🔴 一定要用 split("\n")，不能用 splitlines()。
+    #
+    # json.dumps(ensure_ascii=False) 只跳脫 \n \r \t " \\ 與 0x20 以下的控制字元，
+    # **不跳脫** U+2028 LINE SEPARATOR、U+2029 PARAGRAPH SEPARATOR、U+0085 NEL。
+    # 但 str.splitlines() 會在這三個上面斷行 —— 一筆合法的 JSONL 被切成兩半，
+    # 讀回來就是 JSONDecodeError: Unterminated string。
+    #
+    # 2026-09-22 用自己這 17,764 筆實測：裡面有 2 個 U+2028，splitlines() 數出
+    # 17,766 行、split("\n") 數出 17,764 行。而且它不是只讓那兩筆讀不到 ——
+    # load_local() 直接拋例外，模組整個載不起來：test_module_a 從 3 紅變成 12 紅，
+    # 連 can_handle 都進不去。空 data/ 的時代碰不到，一放真語料就爆。
+    #
+    # C 在 2026-09-20 踩過同一個坑（10,051 筆裡也是 2 個），見 c_tbd/m1_corpus.py。
+    # _template 與 e_tbd 還是 splitlines()，那是別人的資料夾，沒有一起改。
+    for line in LOCAL_CORPUS.read_text(encoding="utf-8").split("\n"):
         if not line.strip():
             continue
         raw = json.loads(line)
