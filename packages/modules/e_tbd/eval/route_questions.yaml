@@ -1,46 +1,91 @@
-# 20 題考題（說明書 S12 第 4 點、S14 第 3 點）。
-# 每題寫成「受害者會怎麼講這件事」的白話查詢，至少 8 題完全不含專有名詞。
+# 20 題路由考題（說明書 S16 入場檢查第 3 項、S20 路由測驗）。
 #
-# 出題太簡單會讓分數虛高。整個專案的起點就是「群組裡的老師叫我先入金才能出金」
-# 在官方站台 0 筆命中 —— 你的題目要逼近那個場景。
+# ⚠ 這份**不是**檢索評估集，兩者用途不同不能共用：
 #
-# 欄位：
-#   text          白話查詢
-#   gold_case_ids 正確答案的案例編號（S10 標的那 60 筆裡挑）
-#   plain         true 表示完全不含專有名詞
+#   路由考題（這份）  測 can_handle —— 要含使用者會轉述的話術，
+#                     那正是模組用來區分類別的線索
+#   檢索評估集        測 Recall@5 —— 刻意避開專有名詞，否則詞彙比對
+#                     會不公平地佔便宜（見 eval/retrieval_queries.yaml）
 #
-# ── 狀態 ──────────────────────────────────────────────────────
-# TODO(S12)：目前 7 題，要補到 20 題。
-# TODO(S10)：gold_case_ids 全部待填——要等自己那 60 筆標完才有編號可填。
+# 實測過：把檢索評估集拿來測 can_handle 會得到 0/20，不是詞表壞掉，
+# 是那批題目設計上就避開了路由所需的線索。
 #
-# 這 7 題是照 E 的情境寫的初版，刻意避開「人頭帳戶」「幫助詐欺」這類
-# 受害者當下根本不會用的詞：會來問的人多半還以為自己在找工作。
-# ──────────────────────────────────────────────────────────────
+# 出題依據：12,743 筆 Threads 案例的階段命中率，以及 Threads 網購 vs
+# 非 Threads 的 lift 分析（2026-09-22）。受害者向警方陳述時會轉述對方
+# 用過的話術——「他說我實名認證沒完成」是真的會出現的句子。
+#
+# TODO(S10)：gold_case_ids 要等 60 筆標註完才有編號可填。
 
-- text: 應徵打工對方叫我把提款卡寄給他，說是要發薪水用
+# ── 決定性訊號：實名認證話術（階段 6，命中率 39.5%，lift 7.6）──
+- text: 在 Threads 買東西賣家說我實名認證沒完成訂單卡住了
   gold_case_ids: []
-  plain: true
+  plain: false
+- text: 下單後收到通知說未完成認證要我聯繫線上客服
+  gold_case_ids: []
+  plain: false
+- text: 對方說我認證失敗要重新驗證才能出貨
+  gold_case_ids: []
+  plain: false
+- text: 店家傳訊說我的資料沒有完成實名要我補
+  gold_case_ids: []
+  plain: false
 
-- text: 面試完他說要我的存摺封面拍照建檔
+# ── 假物流連結（階段 4，命中率 47.5%，lift 7.9）──
+- text: 他給我一個賣貨便的連結要我填資料才能寄件
   gold_case_ids: []
-  plain: true
+  plain: false
+- text: 賣家說用交貨便寄但連結點進去要我輸入帳號
+  gold_case_ids: []
+  plain: false
+- text: 說好店到店結果傳來的網址要我填銀行資料
+  gold_case_ids: []
+  plain: false
 
-- text: 網路上看到日領的工作，加了好友之後對方一直問我有沒有網銀
+# ── 假客服介入（階段 7，命中率 56.0%，lift 5.6）──
+- text: 線上客服打來說我訂單重複扣款要協助我退款
   gold_case_ids: []
-  plain: true
+  plain: false
+- text: 自稱線上客服的人說要幫我解除認證問題
+  gold_case_ids: []
+  plain: false
 
-- text: 他說公司要調度資金，叫我先幫忙把錢領出來交給同事
+# ── 遠端操作與驗證碼（階段 9、10，決定性訊號）──
+- text: 客服要我開共享畫面教我操作網銀解除訂單異常
   gold_case_ids: []
-  plain: true
+  plain: false
+- text: 他要我把簡訊收到的驗證碼給他說是確認訂單
+  gold_case_ids: []
+  plain: false
+- text: 對方叫我到 ATM 按幾個鍵就能把錯誤的扣款退回來
+  gold_case_ids: []
+  plain: false
 
-- text: 我把卡寄出去之後，銀行打來說我的帳戶被凍結了
+# ── 交易與重複付款（階段 3、8）──
+- text: 在 Threads 看到有人賣鞋談好價錢匯了訂金就被封鎖
   gold_case_ids: []
-  plain: true
+  plain: false
+- text: 下單付款後他說金額填錯要我再匯一次
+  gold_case_ids: []
+  plain: false
+- text: 滑到貼文買演唱會門票下單後對方就不見了
+  gold_case_ids: []
+  plain: false
+- text: 訂金匯過去之後他又要我補一筆手續費才出貨
+  gold_case_ids: []
+  plain: false
 
-- text: 警察通知我去做筆錄，說有人匯錢到我的帳戶但我完全不知道
+# ── 賣家側（假買家騙賣家，649 筆）──
+- text: 我在 Threads 賣東西買家說付款失敗要我去認證
   gold_case_ids: []
-  plain: true
+  plain: false
+- text: 買家傳來一個連結說要我完成賣家認證才能收款
+  gold_case_ids: []
+  plain: false
 
-- text: 對方說只要幫忙代收包裹再轉寄出去，一件給我五百
+# ── 資金流出（階段 11）──
+- text: 照著客服說的操作之後帳戶的錢被轉走了
   gold_case_ids: []
-  plain: true
+  plain: false
+- text: 完成他說的認證步驟後信用卡被盜刷
+  gold_case_ids: []
+  plain: false
