@@ -1,0 +1,202 @@
+# 標註 schema（S10）—— 60 筆人工標註要填什麼
+#
+# 這份檔案只有「欄位定義」，沒有任何案例內容，所以進版控。
+# 標好的資料寫進 `data/annotations.jsonl` —— 那個路徑在 .gitignore 裡
+# （`packages/modules/*/data/*`），因為裡面是真實受害者的第一人稱敘述。
+#
+# 🔴 欄位清單是從**下游指標反推**的，不是想到什麼標什麼。
+#    標完才發現少一欄，等於 60 筆重來。對照表：
+#
+#      欄位群            餵給誰                                門檻
+#      ────────────────────────────────────────────────────────────
+#      stage             playbook.yaml 的階段與 cues 校正      —
+#      profile           共用欄位 F1 / 特有欄位 F1             0.70 / 0.60
+#      facets_true       facets.derive_from_text() 準確率      （目前無門檻，限制 8）
+#      question          route_questions.yaml 的 20 題         can_handle ≥ 17/20
+#      similar_case_ids  route_questions 的 gold_case_ids      Recall@5 ≥ 0.75
+#
+# TODO(S10)：judgement 那幾條判準要 C 自己讀過案例才訂得出來，
+#            這份只定「要填什麼」，不定「怎麼判」。規則書是另一份。
+
+version: "0.1.0"
+module: c_tbd
+sample_size: 60
+sampled_on: "2026-09-23"
+
+# ──────────────────────────────────────────────────────────────
+# 一、階段（單選，必填）
+# ──────────────────────────────────────────────────────────────
+#
+# TODO(S10)：這六個階段是草案，要用真實案例驗過才算數。
+# ⚠ 這是**草案**，依 README 寫的典型路徑推的：
+#   FB 廣告或社團接觸 → 導流到 LINE 群組 → 老師帶單 → 假平台出不了金。
+#   標到第 10 筆左右如果發現切不乾淨，回來改這張表再重標前面幾筆 ——
+#   那比硬套一個不合的分類好。
+#
+# 標完之後這張表就是 playbook.yaml 的階段定義，cues 從實際敘述裡撈。
+
+stage:
+  required: true
+  values:
+    - id: contacted
+      name: 看到廣告或被加好友
+      risk: medium
+      hint: 還沒進群組，也還沒付任何錢
+    - id: grouped
+      name: 進了群組跟著看單
+      risk: medium
+      hint: 在群組裡，還沒入金或只投了很小的體驗金
+    - id: deposited
+      name: 已經入金，帳面在獲利
+      risk: high
+      hint: 錢已經進去了，App 或網站上顯示有賺
+    - id: blocked
+      name: 要出金被擋
+      risk: high
+      hint: 對方以稅金／保證金／流水不足等理由要求再付錢才放行
+    - id: repaid
+      name: 為了出金又付了第二筆以上
+      risk: critical
+      hint: 這是損失擴大的主因，行動清單最該擋住的一步
+    - id: cutoff
+      name: 對方失聯或群組解散
+      risk: critical
+      hint: 已經確定被騙，重點轉向圈存、報案與第二波詐騙的預防
+
+# ──────────────────────────────────────────────────────────────
+# 二、CaseProfile 共用欄位（餵共用欄位 F1，門檻 ≥ 0.70）
+# ──────────────────────────────────────────────────────────────
+#
+# 五個欄位。第六個共用欄位 scam_stage 就是上面的 stage，不重複填。
+# 敘述裡沒提到就填 null —— **不要用猜的補滿**，那會讓 F1 量到的是標註者的
+# 想像力不是模型的抽取力。
+
+profile:
+  contact_platform:
+    required: true
+    type: string | null
+    hint: 第一次接觸的平台。例：Facebook／Facebook 社團／Instagram
+  moved_to:
+    required: true
+    type: string | null
+    hint: 後來轉到哪裡聊。例：LINE／LINE 群組／Telegram／對方的 App
+  payment_method:
+    required: true
+    type: string | null
+    values: [網銀匯款, ATM轉帳, 面交, 虛擬貨幣, 超商代碼, 信用卡, 遊戲點數, null]
+    hint: 有多種時填**金額最大**的那一種，並在 notes 記其餘
+  amount_range:
+    required: true
+    type: enum
+    values: ["<1萬", "1-10萬", "10-50萬", "50-100萬", ">100萬", "未提及"]
+    hint: 🔴 級距，不是精確金額（schemas.py 明寫「不放精確金額」）
+  days_elapsed:
+    required: false
+    type: int | null
+    hint: 從第一次接觸到敘述當下拖了幾天。算不出來填 null，不要估
+
+# ──────────────────────────────────────────────────────────────
+# 三、C 特有欄位（餵特有欄位 F1，門檻 ≥ 0.60）
+# ──────────────────────────────────────────────────────────────
+#
+# 🔴 schemas.py 的規定：「特有欄位要能真的影響行動清單，否則就是裝飾」。
+#    所以每一欄都附「它改變哪一條行動」。改不動行動的欄位不要加進來。
+#
+# TODO(S10)：這五欄是依手法推的，還沒驗過真實案例裡填不填得出來。
+#            標到一半發現某一欄十筆有九筆是 null，那欄就該拿掉 —— 抽不出來的
+#            欄位進不了行動清單，留著只會把特有欄位 F1 的分母灌大。
+
+module_specific:
+  fake_platform_name:
+    required: true
+    type: string | null
+    hint: 假投資平台或 App 的名稱
+    changes_action: 有名字才給得出「拿這個名字去金管會核准名單查證、並提供給 165 通報」
+  withdrawal_blocked_reason:
+    required: true
+    type: string | null
+    values: [稅金, 保證金, 手續費, 流水不足, 帳戶異常, 解凍費, 其他, null]
+    hint: 對方用什麼理由擋住出金
+    changes_action: 「不要再匯第二筆」這句話要針對他聽到的那個理由講，否則勸不動
+  transfer_count:
+    required: true
+    type: int | null
+    hint: 總共匯了幾筆（不是金額）
+    changes_action: 一筆 vs 多筆決定圈存的優先序，也決定要不要預警第三筆
+  group_type:
+    required: true
+    type: string | null
+    values: [FB社團, FB私訊, FB廣告一頁式, 直播, LINE群組, LINE一對一, 其他]
+    hint: 主要的接觸與帶單場域
+    changes_action: 檢舉管道不同 —— FB 社團檢舉、LINE 官方帳號回報是兩條路
+  recruited_others:
+    required: true
+    type: bool | null
+    hint: 有沒有把親友也拉進去
+    changes_action: 是的話行動清單要多一條「立刻通知對方停手」，而且優先序在圈存之前
+
+# ──────────────────────────────────────────────────────────────
+# 四、facets 真值（餵 derive_from_text() 的準確率，限制 8）
+# ──────────────────────────────────────────────────────────────
+#
+# 複選。標的是「這段敘述**真的**講到什麼」，不是「規則抽出了什麼」——
+# 兩者放在一起才量得出漏抓與錯抓。詞彙表見 facets.py 的 TABLES。
+
+facets_true:
+  category: { required: true, type: list, hint: 只標這筆真的屬於的類型 }
+  channel: { required: true, type: list }
+  payment: { required: true, type: list }
+  target: { required: true, type: list, hint: 敘述沒交代受害者身分就留空陣列 }
+
+# ──────────────────────────────────────────────────────────────
+# 五、考題與 gold（餵 route_questions.yaml）
+# ──────────────────────────────────────────────────────────────
+
+question:
+  usable:
+    required: true
+    type: bool
+    hint: 這筆適不適合改寫成考題。60 筆裡挑得出 20 筆 usable 就夠
+  text:
+    required: false
+    type: string
+    hint: >
+      改寫成「受害者當下會怎麼問」。🔴 是視角轉換不是摘要 ——
+      案件敘述是事後寫給 165 的完整陳述（有時間序、有結論），
+      而使用者來問的時候是進行中、片段、還不確定自己被騙了。
+  plain:
+    required: false
+    type: bool
+    hint: 這題完全不含專有名詞。20 題裡至少要有 8 題 true
+
+similar_case_ids:
+  required: true
+  type: list
+  hint: >
+    同情境的**其他**案例編號，3–5 筆，不含本筆。
+    🔴 這一欄是防洩題用的：如果考題是本筆的改寫、gold 又只填本筆，
+    Recall@5 量到的是「找不找得回我剛改寫的那一筆」—— 一定虛高。
+    所以要另外去語料裡查同情境的幾筆，那幾筆多半不在這 60 筆之內。
+
+# ──────────────────────────────────────────────────────────────
+# 六、標註者欄位
+# ──────────────────────────────────────────────────────────────
+
+meta:
+  annotator: { required: true, type: string, hint: GitHub 帳號 }
+  annotated_on: { required: true, type: string, hint: YYYY-MM-DD }
+  confidence: { required: true, type: enum, values: [high, medium, low] }
+  notes: { required: false, type: string, hint: 判不下去的地方寫在這，裁決時會用到 }
+
+# ──────────────────────────────────────────────────────────────
+# 複核與裁決
+# ──────────────────────────────────────────────────────────────
+#
+# kappa 用 shared.eval.cohen_kappa() 算，門檻 ≥ 0.70，算在 `stage` 這一欄
+# （單選、每筆都有值，是唯一算得出 kappa 的欄位）。
+#
+# 🔴 cohen_kappa() 的註解：「太低代表標註規則寫得不清楚，不是人不認真 ——
+#    先改說明，再重標」。所以低於 0.70 時**不要**兩個人吵哪筆對，
+#    回去改規則書再重標一輪。
+#
+# TODO(S10)：複核者是誰還沒問到。裁決規則待訂。
