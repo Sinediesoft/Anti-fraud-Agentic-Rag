@@ -22,6 +22,56 @@ def _route_min() -> float:
     return load("a_tbd").get("a_tbd").pack.thresholds.route_min
 
 
+def _fixture_cases():
+    """檢索測試用的小語料池。
+
+    這幾條測試原本直接呼叫 search() 不帶 cases=，等於去讀
+    packages/modules/a_tbd/data/cases.jsonl —— 那個路徑被 .gitignore 擋掉
+    （`packages/modules/*/data/*`），各自本機跑 M1 才會有。**CI 永遠不會有**，
+    所以三條測試在 CI 一律撈回 0 筆而紅，本機卻是綠的。
+
+    改成餵固定的小語料池：不依賴未版控的檔案、不依賴向量庫（沒有 index 時
+    search() 會退回字元重疊，不需要 ml 那組套件），而且因為內容是寫死的，
+    可以斷言真正的排序，不只是「有回 5 筆」。
+
+    池子刻意小於 top_k × _MIN_POOL_AFTER_FILTER_FACTOR，所以第一道門檻的
+    手法詞篩選不會動它（「篩完太少就不篩」），排序完全由第二道門檻決定。
+
+    搭配 _force_overlap_base() 一起用 —— 原因見那支的說明。
+    """
+    from modules.a_tbd.m1_corpus import Case
+
+    return [
+        # 前三筆同時提到「群組」與「出金」—— 手法詞加分該給滿
+        Case(case_id="F1", text="我在LINE投資群組裡被老師慫恿入金，要出金時平台說要先繳保證金"),
+        Case(case_id="F2", text="加入LINE群組後跟著老師操作，獲利看得到卻出金失敗"),
+        Case(case_id="F3", text="LINE群組的分析師叫我加碼，現在出金被拒還要我繳稅金"),
+        # 後面這幾筆是同一類案子，但沒有同時講到那兩件事
+        Case(case_id="F4", text="在LINE上認識的人推薦我買股票，說穩賺不賠，結果賠光"),
+        Case(case_id="F5", text="LINE好友傳假投資網站給我，我匯了三萬元過去就被封鎖"),
+        Case(case_id="F6", text="對方在LINE上說虛擬貨幣保證獲利，我面交現金給他之後就聯絡不上"),
+        Case(case_id="F7", text="我在LINE被騙去一個投資平台，帳面上有獲利但提領不出來"),
+        Case(case_id="F8", text="LINE上的投資顧問要我下載APP，入金之後客服就不回了"),
+    ]
+
+
+@pytest.fixture
+def _force_overlap_base(monkeypatch):
+    """讓底分一律走字元重疊那條退路。
+
+    不這樣做的話這三條測試在本機與 CI 的行為不同：_vector_scores() 是用
+    **真實語料的 case_id** 查表的，本機有 index/ 時它會回一個字典，而上面
+    那幾筆 F1–F8 不在裡面 -> 底分全部是 0，只剩手法詞加分；CI 沒有 index，
+    回 None，底分才是字元重疊。同一份測試兩種算法，等於沒有基準。
+
+    這三條驗的是兩道門檻與手法詞加分，不是向量層（向量層要 ml 那組套件，
+    CI 本來就跑不了）。所以明確釘死退路，兩邊行為一致。
+    """
+    from modules.a_tbd import m3_retrieval
+
+    monkeypatch.setattr(m3_retrieval, "_vector_scores", lambda *_a, **_k: None)
+
+
 def test_四個進入點都回得出東西():
     m = _module()
     assert isinstance(m.can_handle(AnalyzeInput(text="被騙了")), float)
@@ -198,7 +248,7 @@ def test_離題的問句不該拿回任何案例():
         assert m3_retrieval.search(query, top_k=5) == [], query
 
 
-def test_出事了但講不出手法的人要找得到案例():
+def test_出事了但講不出手法的人要找得到案例(_force_overlap_base):
     """「我在LINE上被騙了三萬元」—— 沒有任何手法詞，但他是真的受害者。
 
     這種人最需要看到相似案例，卻最講不出關鍵字。所以第一道門檻除了手法詞
@@ -210,12 +260,12 @@ def test_出事了但講不出手法的人要找得到案例():
     """
     from modules.a_tbd import m3_retrieval
 
-    hits = m3_retrieval.search("我在LINE上被騙了三萬元", top_k=5)
+    hits = m3_retrieval.search("我在LINE上被騙了三萬元", top_k=5, cases=_fixture_cases())
     assert len(hits) == 5
     assert all(h.case_id for h in hits)
 
 
-def test_該撈到的還是要撈得到():
+def test_該撈到的還是要撈得到(_force_overlap_base):
     """第一道門檻的反面 —— 擋掉離題很容易順手把相關的也擋掉。
 
     第二句刻意不說平台：那是這個專案的起點題（「群組裡的老師叫我先入金
@@ -223,17 +273,24 @@ def test_該撈到的還是要撈得到():
     """
     from modules.a_tbd import m3_retrieval
 
+    pool = _fixture_cases()
     for query in [
         "LINE 群組裡的老師叫我先入金才能出金",
         "群組裡的老師叫我先入金才能出金",
         "line上有人找我投資，說保證獲利",
     ]:
-        hits = m3_retrieval.search(query, top_k=5)
-        assert len(hits) == 5, query
+        hits = m3_retrieval.search(query, top_k=5, cases=pool)
+        # 斷言是「撈得到」，不是「剛好 5 筆」。原本寫 == 5 是照 17,764 筆的
+        # 語料校準的，放到 8 筆的固定池就變成在測這個池子有多大 ——
+        # 第二句沒有平台詞，F4 跟它一個 2-gram 都不共用也沒有手法詞，
+        # 分數是 0 被濾掉，回 4 筆才是對的。
+        assert hits, query
+        assert len(hits) <= 5, query
         assert all(h.case_id for h in hits), "每一筆都要帶案例編號"
+        assert all(h.score > 0 for h in hits), "分數 0 的不該回傳"
 
 
-def test_提到手法詞的案例要排在前面():
+def test_提到手法詞的案例要排在前面(_force_overlap_base):
     """第二道門檻的加分。
 
     向量相似度只看「整段話像不像」，分不出「像是因為都在講投資」還是
@@ -245,8 +302,12 @@ def test_提到手法詞的案例要排在前面():
     from modules.a_tbd import m3_retrieval
 
     q = "LINE 群組裡的老師叫我先入金才能出金"
-    hits = m3_retrieval.search(q, top_k=5)
+    hits = m3_retrieval.search(q, top_k=5, cases=_fixture_cases())
     assert len(hits) == 5
+    # 固定語料池讓這件事斷言得出來 —— 原本只驗「有回 5 筆」，
+    # 並沒有測到這個測試名稱承諾的「排在前面」。
+    # F1/F2/F3 同時提到「群組」與「出金」，加分給滿，必須排在前三。
+    assert {h.case_id for h in hits[:3]} == {"F1", "F2", "F3"}
     # 加分是依比例給的：全中才加滿
     assert m3_retrieval._tactic_bonus("提到群組也提到出金", ["群組", "出金"]) == pytest.approx(
         m3_retrieval.TACTIC_BONUS
