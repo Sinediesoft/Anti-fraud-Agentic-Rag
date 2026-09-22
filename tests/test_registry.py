@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contracts import AnalyzeInput
+
 from app.registry import discover, load
 
 
@@ -31,11 +33,27 @@ def test_載入全部時不會有失敗():
 
 
 def test_未設定組合的模組仍然載得起來():
-    # 空置狀態下架構要能跑，只是不認領案子
-    mod = load("a_tbd").get("a_tbd")
+    """空置狀態下架構要能跑，只是不認領案子。
+
+    這條壞過兩次，每次都是同一個原因：它拿「目前還沒填題目的那個人」當例子。
+    先是 a_tbd（2026-09-20 填了 LINE x 假投資），改成 e_tbd 之後又被 PR #41
+    填上 Threads x 網路購物詐騙。現在五個人都宣告完了，沒有模組是空的 ——
+    再挑一個真人的模組，下次還是會壞。
+
+    所以改成用 _template：它是凍結的共用範本、不是任何人的題目。把它的 pack
+    換成空的來驗「空著就不認領」那條路還通，而不是去依賴誰還沒填。
+    斷言也從 is_configured 換成真正的行為後果（can_handle 回 0）——
+    契約層的 is_configured 語意在 test_contracts.py 已經有測了。
+    """
+    mod = load("_template").get("_template")
     assert mod is not None
-    assert mod.usable
-    assert mod.pack.is_configured is False
+    assert mod.usable  # 載得起來
+
+    blank = mod.pack.model_copy(update={"platform": "", "tactic": "", "labels_canon": []})
+    assert blank.is_configured is False
+    mod.instance.pack = blank
+    # 一句標準的假投資敘述：組合填著的時候會拿到分數，空著就必須是 0
+    assert mod.instance.can_handle(AnalyzeInput(text="群組裡的老師叫我先入金才能出金")) == 0.0
 
 
 def test_找不到的模組回報失敗而不是爆炸():

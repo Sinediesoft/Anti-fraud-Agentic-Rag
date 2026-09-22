@@ -3,11 +3,17 @@
 # 五個人的 GitHub 帳號已填齊。動這份時記得同步更新 .github/CODEOWNERS ——
 # 兩份不一致的話，CODEOWNERS 的自動指派不會生效。
 #
-# TODO(S1)：還缺「負責組合」—— D 已填，A／B／C／E 的 platform × tactic 還是 TODO。
-#           題目沒定，那四個模組就開不了工。
+# 「負責組合」的來源一律是各自 pack.yaml 的 platform / tactic ——
+# 這份只是彙總，兩邊不一致時以 pack.yaml 為準（那是程式真正讀的那份）。
+# 例外：D 還沒有 pack.yaml（d_tbd/ 目前只有 README.md），那一列的值出自
+# PR #39 的宣告。
 #
-#           先填的人等於先佔位。撞題的話以這份為準來談，不要各自默默做到第五週
-#           才發現兩個人在切同一批語料。
+# 先填的人等於先佔位。撞題的話以這份為準來談，不要各自默默做到第五週
+# 才發現兩個人在切同一批語料。
+#
+# 2026-09-22 對齊：A、C 從各自 pack.yaml 填入；D（PR #39）、E（PR #41）
+# 合併後也填上了。
+# TODO(S1)：B 的題目還沒宣告 —— 五個人裡只剩這一欄是空的。
 #
 # os 欄位不是裝飾：本隊是 1 台 macOS + 4 台 Windows，S3 選模型要看最低配那台，
 # S11 選 OCR 與 S16 指定展示機都依賴這份資料。
@@ -24,8 +30,8 @@ members:
     os: macOS
     gpu: Apple M5 (10核) / 16GB 統一記憶體
     module_dir: packages/modules/a_tbd
-    platform: TODO-平台           # TODO：平台 × 詐騙手法尚未決定
-    tactic: TODO-詐騙手法
+    platform: LINE                # 2026-09-20 決定，見 a_tbd/pack.yaml
+    tactic: 假投資                # 全量語料交集 17,764 筆（門檻 2,000）
     plan: free                    # 說明書：件數最大的一組走免費版開放
   - code: B
     github: shin5shin
@@ -33,7 +39,7 @@ members:
     os: Windows
     gpu: GTX 1650 / 4GB
     module_dir: packages/modules/b_tbd
-    platform: TODO-平台
+    platform: TODO-平台           # TODO(S1)：尚未宣告，b_tbd/ 目前只有 README.md
     tactic: TODO-詐騙手法
     plan: paid
   - code: C
@@ -42,8 +48,8 @@ members:
     os: Windows
     gpu: GTX 1650 / 4GB
     module_dir: packages/modules/c_tbd
-    platform: TODO-平台
-    tactic: TODO-詐騙手法
+    platform: Facebook            # 見 c_tbd/pack.yaml
+    tactic: 投資詐騙              # labels_canon 為「假投資」，與 A 同手法、靠平台分開
     plan: paid
   - code: D
     github: door410
@@ -63,8 +69,11 @@ members:
     os: Windows
     gpu: RTX 5070 Ti / 16GB
     module_dir: packages/modules/e_tbd
-    platform: TODO-平台
-    tactic: TODO-詐騙手法
+    # PR #41 把題目從「求職平台 × 人頭帳戶」改成這組。平台用「起點」定義：
+    # Threads 案例有 57.2% 會導流到 LINE，但 99.5% 是 Threads 先出現，所以
+    # 整條算 E；起點在 LINE 的（例如群組假投資）歸 A。
+    platform: Threads
+    tactic: 網路購物詐騙
     plan: paid
 
 # S16/S22 的展示機：那台要裝得起全部五個模組的依賴，W5 結束前先試裝一次

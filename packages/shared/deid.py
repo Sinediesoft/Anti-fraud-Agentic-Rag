@@ -110,6 +110,34 @@ def amount_to_range(value: float) -> str:
     return "500 萬以上"
 
 
+# ── 年份與日期不是金額 ────────────────────────────────────────────
+#
+# 四位數的西元年剛好落在 _AMOUNT 的 \d{4,12} 裡。三位數的民國年靠下面
+# len(raw) < 4 那道守門躲過去了，西元年躲不過。
+#
+# 2026-09-21 在 165 語料上實測到的後果：「我在2023年12月初」被遮成
+# 「我在1 萬以下年12月初」，而且直接顯示在使用者看得到的相似案例節錄上
+# —— 15 筆展示案例裡有 4 筆中招。
+#
+# 下面列的是 165 自由敘述裡實際出現的主流寫法。刻意只收「有紀年標記」的
+# 形態：光禿禿的「2023」分不出是年份還是金額，那種留給金額規則處理，
+# 因為漏遮金額比誤遮年份嚴重。
+_YEAR_MARK = re.compile(
+    r"""^\s*(?:
+          年                      # 2023年 / 2023 年 / 112年度
+        | [/\-.]\s*\d{1,2}        # 2023/12  2023-12  2023.12  （後面還可以再接一段）
+    )""",
+    re.VERBOSE,
+)
+# 「民國」「西元」在前面時，連兩位數的也算年份（民國98年）
+_ERA_MARK = re.compile(r"(?:民國|民国|西元|西曆|西历)\s*$")
+
+
+def _is_year_or_date(text: str, start: int, end: int) -> bool:
+    """這個數字是年份或日期，不是金額。"""
+    return bool(_YEAR_MARK.match(text[end : end + 4]) or _ERA_MARK.search(text[:start]))
+
+
 def _mask_amounts(text: str, redactions: list[Redaction]) -> str:
     def repl_cn(m: re.Match[str]) -> str:
         unit = 10_000 if m.group(2) == "萬" else 100_000_000
@@ -123,6 +151,9 @@ def _mask_amounts(text: str, redactions: list[Redaction]) -> str:
         raw = m.group(1).replace(",", "")
         # 四位數以下又沒有千分位的多半是年份或編號，不是金額，留著
         if "," not in m.group(1) and len(raw) < 4:
+            return m.group(0)
+        # 有千分位就一定是金額（1,234 不會是年份），其餘要先排除年份與日期
+        if "," not in m.group(1) and _is_year_or_date(text, m.start(), m.end()):
             return m.group(0)
         label = amount_to_range(float(raw))
         redactions.append(Redaction(kind="amount", start=m.start(), end=m.end(), placeholder=label))

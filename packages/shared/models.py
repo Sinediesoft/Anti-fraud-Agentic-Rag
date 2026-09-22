@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -138,7 +139,9 @@ EMBED_POOLING = "cls"
 # 位址可以用環境變數改（有人把 Ollama 裝在教室電腦上，見環境對齊追蹤表的
 # D 那欄），但取樣參數不行，那是五個人要一致的東西。
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-SLM_TIMEOUT_S = 180  # 冷啟動實測 9.2 秒，長輸出會更久；寧可等也不要半路砍掉
+# timeout 也走環境變數：位址既然能指到別台機器，延遲就不會跟本機一樣。
+# 預設 180 是本機實測 —— 冷啟動 9.2 秒，長輸出會更久；寧可等也不要半路砍掉。
+SLM_TIMEOUT_S = int(os.getenv("OLLAMA_TIMEOUT", "180"))
 
 
 def _require(purpose: str) -> ModelLock:
@@ -254,12 +257,27 @@ def _import_ml():
 _EMBEDDER: tuple = ()
 
 
+# 載入要上鎖：外殼會在開機時用背景執行緒預熱（app/ui.py），使用者手速夠快
+# 的話第一次查詢會跟預熱撞在一起 —— 沒有鎖就是兩條執行緒各載一份 2.2GB 的
+# bge-m3，16GB 的機器會很難看。單執行緒的呼叫者完全感覺不到這把鎖。
+_EMBEDDER_LOCK = threading.Lock()
+
+
 def _load_embedder(lock: ModelLock):
     global _EMBEDDER
     key = f"{lock.name}@{lock.revision}"
     if _EMBEDDER and _EMBEDDER[0] == key:
         return _EMBEDDER[1], _EMBEDDER[2]
 
+    with _EMBEDDER_LOCK:
+        # 拿到鎖之後要再查一次：排隊的時候前面那個人可能已經載完了。
+        if _EMBEDDER and _EMBEDDER[0] == key:
+            return _EMBEDDER[1], _EMBEDDER[2]
+        return _load_embedder_locked(lock, key)
+
+
+def _load_embedder_locked(lock: ModelLock, key: str):
+    global _EMBEDDER
     torch, _F, AutoModel, AutoTokenizer = _import_ml()
     # revision 一定要帶 —— 不帶就是跟著上游的 main 跑，那會讓 MODEL_LOCK
     # 釘住的那個 commit 形同虛設，而且不會有任何徵兆。

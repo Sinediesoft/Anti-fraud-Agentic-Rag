@@ -52,11 +52,15 @@ jobs:
         run: |
           mkdir -p detail
           set -o pipefail
-          git fetch origin ${{ github.base_ref }} --depth=1
+          # 這裡刻意不加 --depth=1：--range 要靠 commit 作者判斷整合型 PR，
+          # 淺歷史會讓 git log 查不到作者，而那會 fail closed 變成整片紅。
+          # 上面的 checkout 已經是 fetch-depth: 0，這行只是把 ref 更新到最新。
+          git fetch origin ${{ github.base_ref }}
           git diff --name-only origin/${{ github.base_ref }}...HEAD > /tmp/changed.txt
           uv run python tools/check_ownership.py \
             --author "${{ github.event.pull_request.user.login }}" \
-            --changed-files /tmp/changed.txt 2>&1 | tee detail/ownership.txt
+            --changed-files /tmp/changed.txt \
+            --range "origin/${{ github.base_ref }}...HEAD" 2>&1 | tee detail/ownership.txt
 
       # 檢查五：印到 stdout 的字，繁中 Windows(cp950) 編得出來嗎（Issue #7）
       # 模組 A 在 macOS 開發，作者本機永遠重現不了；四台 Windows 全部會踩到。
