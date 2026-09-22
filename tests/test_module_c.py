@@ -175,16 +175,28 @@ def test_填了詞彙表沒有的值要當場報錯():
 
 
 # ── 移植：向量儲存層 ────────────────────────────────────────────────
+#
+# 🔴 這一節每一條都要先 importorskip("numpy")。
+#
+# NumpyStore.__init__ 就會呼叫 _import_numpy()，所以沒裝 numpy 的機器
+# （= CI 的 uv sync --extra dev，= 照 README 跑 make install 的人）在建構
+# 的那一行就拿到 ModelDependencyError。那是 m3_retrieval 刻意丟的、由
+# search() 接住退到第 3 層的東西，不是這幾條要驗的行為。
+#
+# 用 importorskip 而不是 find_spec 守衛：它是真的 import，不會像 find_spec
+# 那樣「攔得住 import numpy、攔不住 find_spec」而在模擬環境裡漏判。
 
 
 def test_維度對不上要當場報錯():
     """維度不合的向量算出來的相似度是沒有意義的數字，不能默默存進去。"""
+    pytest.importorskip("numpy")
     store = NumpyStore("測試模型", dim=4)
     with pytest.raises(ValueError, match="維度對不上"):
         store.add(_cases()[:1], [[0.1, 0.2, 0.3]])
 
 
 def test_數量對不起來要當場報錯():
+    pytest.importorskip("numpy")
     store = NumpyStore("測試模型", dim=3)
     with pytest.raises(ValueError, match="數量對不起來"):
         store.add(_cases()[:2], [[0.1, 0.2, 0.3]])
@@ -196,6 +208,7 @@ def test_換了模型就不讀舊快取(tmp_path):
     這條在本專案格外重要：S3 鎖定嵌入模型時填的 revision 一旦變動，
     五個人各自的索引都要重建，否則分數不能互相比較。
     """
+    pytest.importorskip("numpy")
     path = tmp_path / "vectors.npz"
     a = NumpyStore("模型甲", dim=3, path=path)
     a.add(_cases()[:1], [[1.0, 0.0, 0.0]])
@@ -218,6 +231,10 @@ def test_檢索器的快取鍵來自鎖定表而不是空字串(tmp_path):
     assert lock.name in Retriever.embed_model
     assert lock.revision in Retriever.embed_model
 
+    # 守衛放在這裡而不是開頭：上面那三條是純字串比對，不碰 numpy，
+    # 沒裝的機器（CI）照樣要驗得到「鍵真的接到 MODEL_LOCK」。
+    pytest.importorskip("numpy")
+
     # 拿真正的鍵存一份，再假裝上游把 revision 往前挪 —— 必須讀不回來
     path = tmp_path / "vectors.npz"
     real = NumpyStore(Retriever.embed_model, dim=3, path=path)
@@ -228,6 +245,7 @@ def test_檢索器的快取鍵來自鎖定表而不是空字串(tmp_path):
 
 
 def test_刪得掉某個來源的案例():
+    pytest.importorskip("numpy")
     store = NumpyStore("測試模型", dim=2)
     cases = _cases()
     cases[0].source = "165"
@@ -240,6 +258,7 @@ def test_刪得掉某個來源的案例():
 
 
 def test_不准刪來源為空的案例():
+    pytest.importorskip("numpy")
     store = NumpyStore("測試模型", dim=2)
     with pytest.raises(ValueError):
         store.remove_source("")
@@ -614,14 +633,67 @@ def test_一模一樣的句子只留一次(monkeypatch):
     assert text == "甲句。乙句。"
 
 
-def test_生成失敗時整份判讀仍然拿得出來(monkeypatch):
-    """退路的意義：生成掛掉只該讓說明退回劇本版本，不該讓判讀消失。"""
+def test_生成失敗時整份判讀仍然拿得出來(tmp_path, monkeypatch):
+    """退路的意義：生成掛掉只該讓說明退回劇本版本，不該讓判讀消失。
+
+    🔴 這條原本直接 analyze()，而 M5 的 retrieve() 會去讀 data/cases.jsonl ——
+    那個路徑被 .gitignore（`packages/modules/*/data/*`）擋掉，自己跑過 M1 才會
+    有。**CI 的 clone 永遠不會有** → 撈回 0 筆 → `assert v.similar_cases` 炸，
+    本機卻是綠的。跟模組 A 那三條是同一類問題，修法也照它：餵固定的小語料。
+
+    兩個 monkeypatch 各修一件事：
+
+      · LOCAL_CORPUS  改讀 tmp 裡那三筆，不依賴未版控的檔案
+      · MODEL_READY   關掉第 1 層，每台機器都走同一條路（第 3 層關鍵字）
+
+    關掉第 1 層不是為了迴避：這條測的是「生成掛掉判讀還在」，檢索只要回得出
+    東西就夠。留著它反而會讓結果依機器分岔 —— 裝了 ml 那組的會走去建索引，
+    而且會把這三筆假語料 save() 進真正的 INDEX_PATH。
+
+    🔴 要改的是 `modules.c_tbd.*`，不是這個檔案上面 import 的 `packages.modules.c_tbd.*`。
+
+    registry 是用 `modules.c_tbd` 這個名字載模組的（app/registry.py 把 packages/
+    掛進 sys.path），所以同一份原始碼在 sys.modules 裡有**兩個互不相干的模組物件**：
+    測試檔頂端 import 的那份，跟 analyze() 實際在跑的那份。改錯邊的話 monkeypatch
+    等於沒發生 —— 而且**在本機會靜悄悄地過**，因為 data/cases.jsonl 真的在，
+    analyze() 照樣撈得到東西。這正是這條測試原本要修掉的那種假綠燈。
+
+    （上面那條 test_讀得回帶有U2028的語料 改 `packages.…` 是對的：它自己呼叫
+    自己改的那份 load_local()，沒有跨到 registry 那邊。）
+    """
+    import importlib
+
+    m = _module()  # 先載入，modules.c_tbd.* 才會在 sys.modules 裡
+    m1 = importlib.import_module("modules.c_tbd.m1_corpus")
+    m3_retrieval = importlib.import_module("modules.c_tbd.m3_retrieval")
+
+    path = tmp_path / "cases.jsonl"
+    path.write_text(
+        "\n".join(
+            json.dumps(
+                {
+                    "case_id": c.case_id,
+                    "text": c.text,
+                    "source": "165",
+                    "label": c.label,
+                    "date": c.date,
+                    "county": c.county,
+                },
+                ensure_ascii=False,
+            )
+            for c in _cases()
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(m1, "LOCAL_CORPUS", path)
+    monkeypatch.setattr(m3_retrieval, "MODEL_READY", False)
 
     def boom(*a, **k):
         raise models.ModelDependencyError("沒裝")
 
     monkeypatch.setattr(generation.models, "call_slm", boom)
-    v = _module().analyze(AnalyzeInput(text="我在臉書看到投資廣告，匯款後出不了金"))
+    v = m.analyze(AnalyzeInput(text="我在臉書看到投資廣告，匯款後出不了金"))
     assert v.stage_explanation  # 劇本裡那份固定說明
     assert v.similar_cases  # 檢索結果不受影響
     assert any("說明退回劇本固定版本" in r for r in v.degraded_reasons)
