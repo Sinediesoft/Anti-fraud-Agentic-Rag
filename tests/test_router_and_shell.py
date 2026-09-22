@@ -11,6 +11,7 @@ from contracts import (
     PackSpec,
     Plan,
     RiskLevel,
+    Thresholds,
     Verdict,
 )
 
@@ -214,3 +215,105 @@ def test_真模組掛上外殼跑得完(selection):
     res = shell.analyze(AnalyzeInput(text="有人說我中獎了要我先繳手續費"))
     assert res.coverage in tuple(CoverageStatus)
     assert res.disclaimer
+
+
+# ── 多模組喚起：analyze_all（跨平台的案子兩邊都要出判讀）────────
+
+
+def _t(route_min: float = 0.55, hint: float = 0.35) -> Thresholds:
+    return Thresholds(route_min=route_min, route_hint_min=hint)
+
+
+def _shell(modules, *, unlocked: bool = True) -> Shell:
+    return Shell(_假註冊表(modules), Entitlements(unlocked=unlocked))
+
+
+def test_兩個模組都認領時各出一份判讀():
+    """實測「fb 點連結加 line，老師說保證獲利」a=0.867 / c=0.817 兩個都過門檻 ——
+    analyze() 只跑分數高的那個，analyze_all() 兩份都給。"""
+    modules = [_wrap(_假模組("a", 0.87), priority=10), _wrap(_假模組("c", 0.82), priority=900)]
+    responses = _shell(modules).analyze_all(AnalyzeInput(text="…"))
+    assert [r.verdict.module_id for r in responses] == ["a", "c"], "第一份要是分數最高的"
+    assert all(r.coverage is CoverageStatus.COVERED for r in responses)
+
+
+def test_只到提示門檻的不會被喚起():
+    modules = [_wrap(_假模組("a", 0.9)), _wrap(_假模組("c", 0.4))]
+    responses = _shell(modules).analyze_all(AnalyzeInput(text="…"))
+    assert len(responses) == 1
+    # 沒被喚起的仍然是提示 —— 還沒出事的句子拿到兩份「你被詐騙了」會誤導
+    assert [h.module_id for h in responses[0].hints] == ["c"]
+
+
+def test_被喚起的模組不會同時出現在提示裡():
+    modules = [_wrap(_假模組("a", 0.87), priority=10), _wrap(_假模組("c", 0.82), priority=900)]
+    responses = _shell(modules).analyze_all(AnalyzeInput(text="…"))
+    assert all(not r.hints for r in responses)
+
+
+def test_都不夠高時回一份尚未涵蓋():
+    responses = _shell([_wrap(_假模組("a", 0.1))]).analyze_all(AnalyzeInput(text="…"))
+    assert len(responses) == 1
+    assert responses[0].coverage is CoverageStatus.UNCOVERED
+    assert responses[0].general_advice
+
+
+def test_多模組時解鎖規則一樣生效():
+    """免費那個出完整判讀，付費那個仍要告訴使用者屬於哪一類（規則一）。"""
+    modules = [
+        _wrap(_假模組("免費", 0.9), plan=Plan.FREE, priority=10),
+        _wrap(_假模組("付費", 0.8), plan=Plan.PAID, priority=900),
+    ]
+    responses = _shell(modules, unlocked=False).analyze_all(AnalyzeInput(text="…"))
+    assert responses[0].coverage is CoverageStatus.COVERED
+    assert responses[1].coverage is CoverageStatus.COVERED_LOCKED
+    assert responses[1].verdict is None
+    assert "假模組付費" in responses[1].locked_notice
+
+
+def test_多模組時輸出檢核一樣生效():
+    """高風險卻沒行動清單的那一份不准吐出去，另一份不受影響。"""
+    modules = [
+        _wrap(_假模組("好", 0.9), priority=10),
+        _wrap(_假模組("壞", 0.8, actions=[]), priority=900),
+    ]
+    responses = _shell(modules).analyze_all(AnalyzeInput(text="…"))
+    assert responses[0].coverage is CoverageStatus.COVERED
+    assert responses[1].coverage is CoverageStatus.UNCOVERED
+
+
+def test_一個模組爆炸不影響另一個():
+    class _會爆炸的(_假模組):
+        def analyze(self, payload):
+            raise RuntimeError("模型掛了")
+
+    modules = [_wrap(_會爆炸的("壞", 0.9), priority=10), _wrap(_假模組("好", 0.8), priority=900)]
+    responses = _shell(modules).analyze_all(AnalyzeInput(text="…"))
+    assert responses[0].coverage is CoverageStatus.UNCOVERED
+    assert responses[1].coverage is CoverageStatus.COVERED
+
+
+def test_各模組用自己的門檻不是同一條():
+    """c 的 route_min 0.55、a 的 0.50 —— 0.52 這個分數只有 a 算認領。"""
+    a = _wrap(_假模組("a", 0.52), priority=10)
+    c = _wrap(_假模組("c", 0.52), priority=900)
+    object.__setattr__(a.pack, "thresholds", _t(0.50))
+    object.__setattr__(c.pack, "thresholds", _t(0.55))
+    responses = _shell([a, c]).analyze_all(AnalyzeInput(text="…"))
+    assert len(responses) == 1
+    assert responses[0].verdict.module_id == "a"
+
+
+def test_手動指定時只跑那一個():
+    modules = [_wrap(_假模組("a", 0.9)), _wrap(_假模組("c", 0.9))]
+    responses = _shell(modules).analyze_all(AnalyzeInput(text="…"), manual="c")
+    assert len(responses) == 1
+    assert responses[0].verdict.module_id == "c"
+
+
+def test_analyze_的行為沒有被_analyze_all_改到():
+    """W2 凍結的那條路要一字不變 —— evaluate.py 與 S16 入場檢查走的是它。"""
+    modules = [_wrap(_假模組("a", 0.87), priority=10), _wrap(_假模組("c", 0.82), priority=900)]
+    res = _shell(modules).analyze(AnalyzeInput(text="…"))
+    assert res.verdict.module_id == "a"
+    assert [h.module_id for h in res.hints] == ["c"], "單模組那條路仍然把其他人當提示"
