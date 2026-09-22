@@ -1,5 +1,10 @@
 # 20 題路由考題（說明書 S16 入場檢查第 3 項、S20 路由測驗）。
 #
+# **全部從 S10 的 60 筆標準答案改寫而來**，每題都有 gold_case_ids。
+# 這是說明書要求的出題方式——2026-09-22 之前這 20 題是自編的，
+# 而真實案例的 can_handle 命中率（58%）反而高於自編題目（11/20），
+# 代表自編題目偏離了真實分布，繼續對它調參數只會過擬合。
+#
 # ⚠ 這份**不是**檢索評估集，兩者用途不同不能共用：
 #
 #   路由考題（這份）  測 can_handle —— 要含使用者會轉述的話術，
@@ -10,82 +15,83 @@
 # 實測過：把檢索評估集拿來測 can_handle 會得到 0/20，不是詞表壞掉，
 # 是那批題目設計上就避開了路由所需的線索。
 #
-# 出題依據：12,743 筆 Threads 案例的階段命中率，以及 Threads 網購 vs
-# 非 Threads 的 lift 分析（2026-09-22）。受害者向警方陳述時會轉述對方
-# 用過的話術——「他說我實名認證沒完成」是真的會出現的句子。
+# 改寫原則：
+#   1. 口語化，像受害者自己打的字。**不照抄案例原文**——原文不得外流
+#   2. 保留話術關鍵詞（實名認證、賣貨便、客服…）。受害者陳述時本來就會
+#      轉述對方用過的詞，那也正是路由的依據
+#   3. 每階段 4 題，涵蓋 none / paid / repeated / credentials / drained
+#   4. **保留平台脈絡**。gold 案例有 94% 提到平台（m1_corpus 本來就是用平台詞篩的），
+#      真實陳述會講「我在 Threads 看到…」。第一版為了讓句子聚焦話術而拿掉平台詞，
+#      等於造出現實中不存在的題目——而 can_handle 把平台當必要條件，那批題目全落榜。
 #
-# TODO(S10)：gold_case_ids 要等 60 筆標註完才有編號可填。
+# 抽樣：從 gold 60 筆依階段分層各抽 4 筆，seed 20260922。
 
-# ── 決定性訊號：實名認證話術（階段 6，命中率 39.5%，lift 7.6）──
-- text: 在 Threads 買東西賣家說我實名認證沒完成訂單卡住了
-  gold_case_ids: []
+# ── 尚未付款（4 題）────────────────────────────────────
+- text: 我在 Threads 看到有人賣水果，對方叫我加 LINE 談交易細節
+  gold_case_ids: ["251193332812746772"]
   plain: false
-- text: 下單後收到通知說未完成認證要我聯繫線上客服
-  gold_case_ids: []
+- text: Threads 賣家說用 7-11 賣貨便交易，點連結卻跳出未完成實名制認證要我找客服
+  gold_case_ids: ["234169994303246348"]
   plain: false
-- text: 對方說我認證失敗要重新驗證才能出貨
-  gold_case_ids: []
+- text: 在 Threads 下單後假客服說我實名認證沒過，要我提供另一張卡片驗證
+  gold_case_ids: ["307503564144513070"]
   plain: false
-- text: 店家傳訊說我的資料沒有完成實名要我補
-  gold_case_ids: []
-  plain: false
-
-# ── 假物流連結（階段 4，命中率 47.5%，lift 7.9）──
-- text: 他給我一個賣貨便的連結要我填資料才能寄件
-  gold_case_ids: []
-  plain: false
-- text: 賣家說用交貨便寄但連結點進去要我輸入帳號
-  gold_case_ids: []
-  plain: false
-- text: 說好店到店結果傳來的網址要我填銀行資料
-  gold_case_ids: []
+- text: 在 Threads 買小說改用 IG 談，下單之後賣家說他的帳戶莫名被凍結
+  gold_case_ids: ["226180394871951360"]
   plain: false
 
-# ── 假客服介入（階段 7，命中率 56.0%，lift 5.6）──
-- text: 線上客服打來說我訂單重複扣款要協助我退款
-  gold_case_ids: []
+# ── 已付款（4 題）──────────────────────────────────────
+- text: Threads 上有人賣演唱會門票，我私訊談好價錢就轉了訂金過去
+  gold_case_ids: ["307752771237449729"]
   plain: false
-- text: 自稱線上客服的人說要幫我解除認證問題
-  gold_case_ids: []
+- text: Threads 賣家要我改用街口支付，給一個 QR code 叫我下載 APP 綁銀行帳戶
+  gold_case_ids: ["251597221911334917"]
   plain: false
-
-# ── 遠端操作與驗證碼（階段 9、10，決定性訊號）──
-- text: 客服要我開共享畫面教我操作網銀解除訂單異常
-  gold_case_ids: []
+- text: 在 Threads 買東西依指示匯了運費，接著網頁出現實名認證的步驟才覺得不對勁
+  gold_case_ids: ["287861230838747138"]
   plain: false
-- text: 他要我把簡訊收到的驗證碼給他說是確認訂單
-  gold_case_ids: []
-  plain: false
-- text: 對方叫我到 ATM 按幾個鍵就能把錯誤的扣款退回來
-  gold_case_ids: []
+- text: 在 Threads 看到有人賣演唱會門票價格很好，我就主動聯繫對方買了
+  gold_case_ids: ["199369142984249366"]
   plain: false
 
-# ── 交易與重複付款（階段 3、8）──
-- text: 在 Threads 看到有人賣鞋談好價錢匯了訂金就被封鎖
-  gold_case_ids: []
+# ── 已重複付款（4 題）──────────────────────────────────
+- text: Threads 買東西用 7-11 賣貨便，訂單顯示尚未實名制認證被凍結，客服要我處理
+  gold_case_ids: ["251552042126938121"]
   plain: false
-- text: 下單付款後他說金額填錯要我再匯一次
-  gold_case_ids: []
+- text: Threads 賣家要我用綠界金流註冊，照做之後前後轉帳和提款總共付了二十幾萬
+  gold_case_ids: ["249093010241884161"]
   plain: false
-- text: 滑到貼文買演唱會門票下單後對方就不見了
-  gold_case_ids: []
+- text: 在 Threads 買二手拍立得，點他給的連結下單後跳出未完成實名制認證
+  gold_case_ids: ["272612758757838854"]
   plain: false
-- text: 訂金匯過去之後他又要我補一筆手續費才出貨
-  gold_case_ids: []
-  plain: false
-
-# ── 賣家側（假買家騙賣家，649 筆）──
-- text: 我在 Threads 賣東西買家說付款失敗要我去認證
-  gold_case_ids: []
-  plain: false
-- text: 買家傳來一個連結說要我完成賣家認證才能收款
-  gold_case_ids: []
+- text: Threads 賣電腦螢幕，他傳交貨便網址要我先付運費，付完又說沒成功要再付
+  gold_case_ids: ["221878729226326069"]
   plain: false
 
-# ── 資金流出（階段 11）──
-- text: 照著客服說的操作之後帳戶的錢被轉走了
-  gold_case_ids: []
+# ── 已交付帳戶控制權（4 題）────────────────────────────
+- text: 在 Threads 買東西客服叫我開視訊分享螢幕看台灣 Pay 付款碼，他就一筆一筆收走
+  gold_case_ids: ["251560424091160576"]
   plain: false
-- text: 完成他說的認證步驟後信用卡被盜刷
-  gold_case_ids: []
+- text: Threads 買相機用賣貨便下單顯示未完成實名制認證，客服給我一個 LINE 連結
+  gold_case_ids: ["216751906670776320"]
+  plain: false
+- text: Threads 交易時客服說要做誠信交易認證，我照指示操作對方卻說沒收到款項
+  gold_case_ids: ["292964587521708055"]
+  plain: false
+- text: Threads 賣家說系統故障給我客服帳號，客服說我沒實名驗證帳號被鎖定要配合流程
+  gold_case_ids: ["271888317455274008"]
+  plain: false
+
+# ── 帳戶遭盜用（4 題）──────────────────────────────────
+- text: Threads 買海報改用 LINE 聯繫，賣家說要用賣貨便還說需要認證金流
+  gold_case_ids: ["232334705196797958"]
+  plain: false
+- text: Threads 買球賽門票，加了自稱客服的 LINE，他說要驗證才能完成交易
+  gold_case_ids: ["237399474341679108"]
+  plain: false
+- text: 在 Threads 用交貨便下單之後跳出訂單異常，叫我去聯繫什麼銀行專員
+  gold_case_ids: ["222236090059198483"]
+  plain: false
+- text: Threads 買家說我帳戶要有三萬元做實名認證，後來還要我把金融卡寄到超商
+  gold_case_ids: ["260282876354891811"]
   plain: false

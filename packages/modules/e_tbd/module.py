@@ -32,6 +32,8 @@ MODULE_DIR = Path(__file__).resolve().parent
 # 的區分力差三倍，平等對待會讓「只提到一個強訊號」的短查詢落榜——
 # 而真實使用者的第一句話往往就只有那一個訊號。
 DECISIVE_TERMS = (
+    # 合法交易流程裡不存在的環節。命中一個就把 can_handle 拉到門檻之上。
+    # 後三個是 2026-09-22 從 S10 gold 補的——原本漏了，導致相關案例路由不到。
     "實名認證",
     "完成實名",
     "未完成認證",
@@ -39,6 +41,9 @@ DECISIVE_TERMS = (
     "賣貨便",
     "交貨便",
     "共享畫面",
+    "分享螢幕",
+    "無卡提款",
+    "付款碼",
 )
 
 
@@ -75,14 +80,26 @@ class JobBoardMuleModule:
             positive=list(self.pack.route_terms) + list(self.pack.labels_canon),
             negative=list(self.pack.negative_terms),
         )
-        # 決定性訊號命中一個就拉到門檻之上，但**不蓋過負面詞的扣分**：
-        # 講「應徵工作對方要我實名認證」的人是隔壁模組的案子，不該被搶走。
-        if score > 0 or not any(t in text for t in self.pack.negative_terms):
-            if any(t in text for t in DECISIVE_TERMS):
-                score = max(score, 0.60)
         platform_hit = any(t and t in text for t in self.pack.platform_terms)
-        # 平台對得上才加分 —— 這是「平台 × 手法」這個分法在路由上的具體表現
-        return min(1.0, score + (0.15 if platform_hit else 0.0))
+        # 決定性訊號命中一個就拉到門檻之上，但有兩個前提：
+        #
+        # 一、不蓋過負面詞的扣分——講「應徵工作對方要我實名認證」的人是隔壁模組的案子。
+        # 二、**平台要對得上**。「賣貨便 + 實名認證」在 FB 購物詐騙一模一樣成立，
+        #     那是全語料最大的組合（27,414 筆）。少了這個條件，2026-09-22 實測
+        #     非 Threads 案例的誤認領率是 30%。自己的語料本來就是用平台詞篩出來的，
+        #     所以加這個條件不會傷到認領率。
+        if score > 0 or not any(t in text for t in self.pack.negative_terms):
+            if platform_hit and any(t in text for t in DECISIVE_TERMS):
+                score = max(score, 0.60)
+        if not platform_hit:
+            # 平台是**必要條件**不只是加分。這個模組的定義就是「Threads × 網購」，
+            # 手法訊號（賣貨便、實名認證、客服…）在 FB 購物詐騙一模一樣成立，
+            # 光靠它們分不出平台。2026-09-22 實測：只加分不設門檻時，
+            # 非 Threads 案例的誤認領率 29%；改成必要條件後見下方數字。
+            # 使用者若沒提平台，由外殼的平台選單處理，不該由模組猜。
+            return min(score, 0.30)
+        # 平台對得上再加分 —— 這是「平台 × 手法」這個分法在路由上的具體表現
+        return min(1.0, score + 0.15)
 
     # ── 進入點 2 ────────────────────────────────────────────
     def analyze(self, payload: AnalyzeInput) -> Verdict:
