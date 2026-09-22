@@ -29,7 +29,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import numpy as np
 from contracts import SimilarCase
 from shared import deid, models
 
@@ -93,6 +92,33 @@ MODEL_READY = models.MODEL_LOCK["embedding"].is_locked
 #   餘弦，兩邊量出來的 min_score 會全部失效。
 
 
+def _import_numpy():
+    """numpy 走延遲 import，跟 shared.models 的 _import_ml() 同一個做法。
+
+    numpy 不在 pyproject 的 dependencies、也不在 dev 那組 —— 它是 ml 那組的
+    torch 順便帶進來的。所以「沒裝 ml」等於「沒有 numpy」，而照 README 跑
+    make install（只裝 dev + ui）的人正是這種機器，CI 也是（uv sync --extra dev）。
+
+    🔴 這個 import 放在模組層的話，整包測試會在**收集階段**就掛掉：
+       collection 期間 import 失敗，pytest 直接 Interrupted，連完全沒用到向量
+       的測試都跑不了。而且模組層的 import 會繞過 tests 裡 importorskip 那層
+       保護 —— 保護寫在測試裡，但炸在 import 時，根本輪不到它。
+
+    丟 ModelDependencyError 而不是讓 ModuleNotFoundError 往上冒，是為了讓
+    search() 現成的那道 except 接得住、照常退到第 3 層。語意上也正好對得上這個
+    例外的定義：模型鎖了、程式也接上了，就是這台少裝套件，下一步是自己裝 extra。
+    """
+    try:
+        import numpy
+    except ImportError as exc:
+        raise models.ModelDependencyError(
+            "向量儲存層要用 numpy，這台沒裝。它跟著 ml 那組進來："
+            "uv sync --extra ml（torch 的 wheel 依平台而異，見 pyproject.toml 的註解）。"
+            "只是要跑測試或用關鍵字檢索的話不必裝 —— 查詢會自動退到第 3 層。"
+        ) from exc
+    return numpy
+
+
 class NumpyStore:
     """全部放在記憶體、存成單一個 .npz。
 
@@ -101,6 +127,8 @@ class NumpyStore:
     """
 
     def __init__(self, model: str, dim: int, path: Path | None = None) -> None:
+        # 這一行是「沒裝 numpy」唯一的守門處 —— 其餘方法都要先有實例才到得了。
+        np = _import_numpy()
         self.model = model  # 哪個嵌入模型算的
         self.dim = dim
         self.path = path
@@ -120,6 +148,7 @@ class NumpyStore:
         return len(self._cases)
 
     def add(self, cases: list[Case], vecs) -> int:
+        np = _import_numpy()
         vecs = np.asarray(vecs, dtype="float32")
         if len(cases) != len(vecs):
             raise ValueError("案例與向量數量對不起來")
@@ -150,6 +179,7 @@ class NumpyStore:
         return removed
 
     def scores(self, qv):
+        np = _import_numpy()
         if len(self._cases) == 0:
             return np.zeros(0, dtype="float32")
         return self._vecs @ qv
@@ -161,6 +191,7 @@ class NumpyStore:
     def save(self) -> None:
         if self.path is None:
             return
+        np = _import_numpy()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         np.savez(
             self.path,
@@ -181,6 +212,7 @@ class NumpyStore:
         """
         if self.path is None or not self.path.exists():
             return False
+        np = _import_numpy()
         z = np.load(self.path, allow_pickle=False)
         meta = json.loads(str(z["meta"]))
         if meta.get("model") != self.model or meta.get("dim") != self.dim:
@@ -317,6 +349,7 @@ class Retriever:
             return []
 
         qv = self.embed([question])[0]
+        np = _import_numpy()
         scores = self.store.scores(np.asarray(qv, dtype="float32"))
 
         if filters:
