@@ -21,9 +21,13 @@ from __future__ import annotations
 
 import io
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
+import time
+import zlib
+from collections import Counter
 from pathlib import Path
 
 import yaml
@@ -240,32 +244,162 @@ def find_edge() -> Path:
     raise SystemExit("找不到 Edge 或 Chrome，無法產生截圖")
 
 
-def render(shot: dict, edge: Path, tmp: Path) -> Path:
+def _rgb(hex_colour: str) -> tuple[int, int, int]:
+    h = hex_colour.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def sample_colours(png: Path) -> set[tuple[int, int, int]]:
+    """PNG 裡出現過哪些顏色（跳點取樣）。純標準庫解碼，不引入 Pillow
+    （專案核心相依是凍結的共管路徑，不能為了一支工具腳本去動它）。"""
+    data = png.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        return set()
+
+    pos, idat, width, height, colortype = 8, b"", 0, 0, 0
+    while pos + 8 <= len(data):
+        (length,) = struct.unpack(">I", data[pos : pos + 4])
+        ctype = data[pos + 4 : pos + 8]
+        if ctype == b"IHDR":
+            width, height, _, colortype = struct.unpack(">IIBB", data[pos + 8 : pos + 18])
+        elif ctype == b"IDAT":
+            idat += data[pos + 8 : pos + 8 + length]
+        elif ctype == b"IEND":
+            break
+        pos += 12 + length
+
+    channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(colortype)
+    if not channels or not width:
+        return set()
+    stride = width * channels
+    raw = zlib.decompress(idat)
+
+    # PNG 的每一行都以前一行為基準做差分，所以不能跳行，只能逐行還原
+    seen: set[tuple[int, int, int]] = set()
+    prev, i = bytearray(stride), 0
+    for y in range(height):
+        if i + 1 + stride > len(raw):
+            break
+        f, line = raw[i], bytearray(raw[i + 1 : i + 1 + stride])
+        i += 1 + stride
+        for x in range(stride):
+            a = line[x - channels] if x >= channels else 0
+            b = prev[x]
+            c = prev[x - channels] if x >= channels else 0
+            if f == 1:
+                line[x] = (line[x] + a) & 0xFF
+            elif f == 2:
+                line[x] = (line[x] + b) & 0xFF
+            elif f == 3:
+                line[x] = (line[x] + (a + b) // 2) & 0xFF
+            elif f == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[x] = (line[x] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 0xFF
+        prev = line
+        if y % 4 == 0:  # 取樣才跳行，還原不跳
+            for x in range(0, width, 4):
+                px = line[x * channels : x * channels + 3]
+                if len(px) == 3:
+                    seen.add((px[0], px[1], px[2]))
+    return seen
+
+
+def kill_stragglers(tmp: Path) -> None:
+    """收掉這次自己叫起來、還沒退場的 Edge。
+
+    Edge 的第一個程序只是 launcher，它把工作丟給背景的 browser process 就自己
+    退出了（實測 0.0 秒返回），所以 subprocess 回來不代表瀏覽器結束。不收的話
+    20 張跑下來會累積幾十個程序互相搶資源，後面的圖就整批截不出來
+    —— 2026-09-23 實測堆到 60 個之後連第一張都失敗。
+
+    只殺 --user-data-dir 指向本次暫存目錄的，使用者自己開的 Edge 視窗不會被動到。
+    """
+    subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | "
+            f"Where-Object {{ $_.CommandLine -like '*{tmp.name}*' }} | "
+            "ForEach-Object { Stop-Process -Id $_.ProcessId -Force "
+            "-ErrorAction SilentlyContinue }",
+        ],
+        capture_output=True,
+        timeout=60,
+    )
+
+
+def render(shot: dict, edge: Path, tmp: Path, idx: int) -> Path:
     width = shot["variant"]["width"]
     height = estimate_height(shot)
     # low_res 用一半的視窗截，出來就真的是低解析度的圖
     scale = 0.5 if shot["variant"]["quality"] == "low_res" else 1.0
 
-    html_file = tmp / f"{shot['id']}.html"
+    # 工作目錄的名字刻意取得極短（tmp/12/p3）。Edge 會在 --user-data-dir 底下
+    # 再建 Default\Cache\Cache_Data\… 一長串，加上外層路徑很容易超過 Windows
+    # 的 260 字元上限；超過的時候 Edge 不報錯，回傳 0、0.0 秒就退出、什麼都不寫。
+    work = tmp / str(idx)
+    work.mkdir(parents=True, exist_ok=True)
+    html_file = work / "page.html"
     html_file.write_text(build_html(shot), encoding="utf-8")
     out = SHOTS_DIR / f"{shot['id']}.png"
+    out.unlink(missing_ok=True)
 
-    subprocess.run(
-        [
-            str(edge),
-            "--headless=new",
-            "--disable-gpu",
-            "--hide-scrollbars",
-            f"--force-device-scale-factor={scale}",
-            f"--screenshot={out}",
-            f"--window-size={width},{height}",
-            html_file.as_uri(),
-        ],
-        check=True,
-        capture_output=True,
-        timeout=120,
-    )
-    return out
+    # 每張給獨立的 user-data-dir。共用預設設定檔時，連續啟動的 headless
+    # 實例會互相卡住，而且 Edge 仍然回傳 0 —— check=True 攔不到，
+    # 結果是留下 0 KB 的圖配上完整的標註（2026-09-23 實測 20 張壞 13 張）。
+    theme = THEMES[shot["variant"]["theme"]]
+    # 截對了的畫面一定看得到自己的底色：版面刻意估高留白，露出 body 的 page 色，
+    # 對話版型則整片是 chat_bg。Edge 的錯誤頁兩個都不會有。
+    wanted = {_rgb(theme["page"]), _rgb(theme["chat_bg"])}
+
+    for attempt in (1, 2, 3, 4, 5):
+        # 每次都截到不同的暫存檔，最後才複製到 screenshots/ ——
+        # subprocess.run 回來時 Edge 的子程序可能還活著，晚幾秒才把畫面寫出來。
+        # 讓它直接寫最終路徑的話，會把上一輪已經驗證過的好圖蓋成錯誤頁，
+        # 而且 render 早就印完 [OK] 了（2026-09-23 就是這樣被騙過去的）。
+        staged = work / f"s{attempt}.png"
+        subprocess.run(
+            [
+                str(edge),
+                "--headless=new",
+                "--disable-gpu",
+                "--hide-scrollbars",
+                "--no-first-run",
+                "--no-default-browser-check",
+                # 沒有這行，Edge 會在頁面排版完成前就截圖然後什麼也不寫，
+                # 而且回傳 0 —— check=True 攔不到
+                "--virtual-time-budget=3000",
+                f"--user-data-dir={work / ('p' + str(attempt))}",
+                f"--force-device-scale-factor={scale}",
+                f"--screenshot={staged}",
+                f"--window-size={width},{height}",
+                html_file.as_uri(),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=120,
+        )
+        # subprocess 回來只代表 launcher 退場，圖還在背景寫（見 kill_stragglers），
+        # 所以自己等檔案出現
+        deadline = time.time() + 45
+        while time.time() < deadline:
+            if staged.exists() and staged.stat().st_size > 0:
+                time.sleep(1.0)  # 讓它把檔案寫完整再讀
+                break
+            time.sleep(0.5)
+        kill_stragglers(tmp)
+
+        # 檔案存在也還不算數：Edge 偶爾會導航失敗，把 ERR_FILE_NOT_FOUND
+        # 的錯誤頁截下來給你 —— 有效的 PNG、大小正常，只有內容是錯的
+        if staged.exists() and staged.stat().st_size > 0 and sample_colours(staged) & wanted:
+            shutil.copyfile(staged, out)
+            return out
+        time.sleep(2)  # 機器忙的時候（例如同時在建向量庫）讓它喘一口
+
+    # 寧可整批失敗也不要放過壞圖 —— 圖是空的或錯的但標註齊全，比沒有更難發現
+    raise RuntimeError(f"{shot['id']} 連續 {attempt} 次都沒截到正確的畫面")
 
 
 def main() -> int:
@@ -274,10 +408,13 @@ def main() -> int:
     print(f"瀏覽器：{edge}")
 
     annotations: list[dict] = []
-    with tempfile.TemporaryDirectory() as td:
+    # 暫存放系統 %TEMP%（路徑短，見 render 裡關於 260 字元的註解）。
+    # ignore_cleanup_errors：Edge 結束後還會壓著 profile 目錄裡的 lockfile 一下下，
+    # 清不掉不是錯誤，圖已經截好了。
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         tmp = Path(td)
-        for shot in shots:
-            png = render(shot, edge, tmp)
+        for idx, shot in enumerate(shots):
+            png = render(shot, edge, tmp, idx)
             size = png.stat().st_size if png.exists() else 0
             status = "OK" if size else "失敗"
             print(f"  [{status}] {png.name}  {size // 1024} KB  ({shot['layout']})")

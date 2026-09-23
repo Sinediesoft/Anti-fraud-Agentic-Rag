@@ -5,7 +5,7 @@ format_version: 1
 module: e_tbd
 annotator: c85016921920-design
 screenshots:
-- file: e01_jobpost_normal.png
+- file: e01_post_normal.png
   layout: ad_post
   variant:
     width: 720
@@ -13,22 +13,20 @@ screenshots:
     quality: sharp
   is_scam: false
   blocks:
-  - text: 宏益文具行
+  - text: 二手 Switch 主機出售
     role: title
-  - text: 行政助理
-    role: title
-  - text: 月薪 30,000 - 34,000 元
+  - text: 6,800 元
     role: price
-  - text: 台中市西區 / 全職 / 日班
+  - text: 台北 / 可面交 / 附原廠盒裝
     role: field
-  - text: 工作內容：文件建檔、電話接聽、簡易帳務整理。需熟 Excel。
+  - text: 用不到兩年，功能正常，附一片健身環。盒裝說明書都在。
     role: body
-  - text: 應徵條件：高中職以上，經驗不拘，具細心特質佳。
+  - text: 可以約捷運站面交驗機，不寄送。有問題留言問我。
     role: body
-  - text: 我要應徵
+  - text: 留言詢問
     role: button
-  notes: 正常職缺。對照組——只餵詐騙樣本會讓模型看到職缺就報警
-- file: e02_jobpost_suspicious.png
+  notes: 正常的二手轉售貼文。對照組——只餵詐騙樣本會讓模型看到賣東西就報警
+- file: e02_post_underpriced.png
   layout: ad_post
   variant:
     width: 720
@@ -36,22 +34,20 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 誠徵 線上客服專員（急）
+  - text: 全新未拆 耳機出清（最後 3 組）
     role: title
-  - text: 日領 3,000 - 5,000 元
+  - text: 1,280 元（原價 7,490）
     role: price
-  - text: 不限地區 / 時間自由 / 在家可做
+  - text: 限今日 / 數量有限 / 售完不補
     role: field
-  - text: 免經驗！免學歷！當天面試當天上工！
+  - text: 公司福委會團購剩餘，保證原廠公司貨，非水貨。
     role: body
-  - text: 工作輕鬆簡單，只需協助處理公司訂單資料。
+  - text: 想要的直接私訊我，留言的不一定看得到。
     role: body
-  - text: 意者請加 LINE 詳談
-    role: body
-  - text: 加 LINE 詢問
+  - text: 私訊我
     role: button
-  notes: 高薪日領免經驗，沒有工作內容說明
-- file: e03_jobpost_detail.png
+  notes: 價格明顯低於行情、限時限量、要求私訊詳談。詐騙貼文最常見的樣子
+- file: e03_product_page.png
   layout: ad_post
   variant:
     width: 720
@@ -59,28 +55,24 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 鑫達國際企業有限公司
+  - text: 演唱會門票 搖滾區 2 張
     role: title
-  - text: 財務專員助理
-    role: title
-  - text: 月薪 65,000 元起
+  - text: 單張 4,500 元
     role: price
-  - text: 職務類別：財務／會計
+  - text: 運費：60 元（超商取貨）
     role: field
-  - text: 工作性質：全職
+  - text: 出貨時間：付款後 24 小時內
     role: field
-  - text: 上班地點：面議
+  - text: 賣家：熱門票券小舖
     role: field
-  - text: 需求人數：不限
+  - text: 聯絡方式：僅接受通訊軟體私訊
     role: field
-  - text: 學歷要求：不拘
-    role: field
-  - text: 工作內容：協助公司資金調度與帳務往來，需配合公司流程操作。
+  - text: 因票券為記名制，下單後請等候客服聯繫辦理過戶。
     role: body
-  - text: 我要應徵
+  - text: 立即下單
     role: button
-  notes: 結構化欄位齊全但公司資訊空泛。S11 要求抓職缺的結構化欄位
-- file: e04_fbgroup_post.png
+  notes: 欄位齊全的商品頁但賣家資訊空泛。S11 要求抓得到結構化欄位
+- file: e04_post_ticket.png
   layout: ad_post
   variant:
     width: 720
@@ -88,24 +80,20 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 台中打工兼職交流社團
+  - text: 【現貨】巨蛋場 內場連號 直接轉
     role: title
-  - text: 陳小恩
+  - text: 一張 3,200 元 兩張一起 6,000
+    role: price
+  - text: 今晚 12 點前匯款保留 / 逾時讓給下一位
     role: field
-  - text: 3 小時前
-    role: field
-  - text: 【急徵】短期工讀 一天 2,500 起
+  - text: 本人有事不能去，原價轉讓不賺價差。
     role: body
-  - text: 內容超簡單，幫忙收發包裹整理資料而已
+  - text: 先匯訂金就幫你留，剩下的取票當天再付。
     role: body
-  - text: 有意願私訊我或加賴 ID：work_tc888
-    role: body
-  - text: 名額不多要快唷
-    role: body
-  - text: 留言 37 · 分享 12
-    role: field
-  notes: 社團招募貼文
-- file: e05_fbgroup_dark.png
+  - text: 私訊搶票
+    role: button
+  notes: 熱門票券現貨。急迫性話術加上只收匯款
+- file: e05_post_dark.png
   layout: ad_post
   variant:
     width: 720
@@ -113,22 +101,20 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 全台打工資訊分享區
+  - text: 樂園門票 代訂（一日券）
     role: title
-  - text: 林品瑜
+  - text: 特價 1,980 元
+    role: price
+  - text: 內部員工票 / 名額有限
     role: field
-  - text: 昨天 21:04
-    role: field
-  - text: 徵人囉 日結 2,800 無經驗可
+  - text: 親戚在旅行社，拿得到內部價，僅剩幾個名額。
     role: body
-  - text: 公司正常營運有登記 不是那種怪怪的工作
+  - text: 需先付全額訂金，出票後給您電子憑證。
     role: body
-  - text: 意者加 LINE：hr_lin0925
-    role: body
-  - text: 留言 54 · 分享 8
-    role: field
-  notes: 同類貼文的深色模式
-- file: e06_jobpost_lowres.png
+  - text: 加我 LINE 詢問
+    role: button
+  notes: 同類貼文的深色模式。深色不是把顏色反過來就好，配色條件是另一組
+- file: e06_post_lowres.png
   layout: ad_post
   variant:
     width: 720
@@ -136,16 +122,20 @@ screenshots:
     quality: low_res
   is_scam: true
   blocks:
-  - text: 徵 兼職助理
+  - text: 二手單眼相機 便宜出
     role: title
-  - text: 日領 2,500
+  - text: 9,500 元
     role: price
-  - text: 免經驗 可在家 時間彈性
+  - text: 全省可寄 / 貨到付款
+    role: field
+  - text: 急需用錢所以便宜賣，功能都正常。
     role: body
-  - text: 詳情加 LINE 詢問
+  - text: 有興趣私我，回訊比較快。
     role: body
+  - text: 私訊
+    role: button
   notes: 低解析度。真實使用者常常是轉傳好幾手的圖
-- file: e07_chat_intro.png
+- file: e07_chat_normal.png
   layout: chat
   variant:
     width: 720
@@ -153,26 +143,28 @@ screenshots:
     quality: sharp
   is_scam: false
   blocks:
-  - text: 您好，看到您在社團應徵，我是人資小林
-    role: bubble
-    speaker: other
-  - text: 您好，請問工作內容是什麼呢
-    role: bubble
-    speaker: self
-  - text: 主要是協助處理公司的訂單與資料建檔
-    role: bubble
-    speaker: other
-  - text: 時間很彈性，一天大概 3 到 4 小時
-    role: bubble
-    speaker: other
-  - text: 好的，那薪水怎麼算
+  - text: 賣家 阿明
+    role: title
+  - text: 你好，請問主機還在嗎
     role: bubble
     speaker: self
-  - text: 日結，一天 2,500，做滿一週另外加獎金
+  - text: 在的，還沒賣出
     role: bubble
     speaker: other
-  notes: 面試開場還看不出問題。對照組——前半段跟正常求職沒有差別
-- file: e08_chat_id_request.png
+  - text: 6500 可以嗎
+    role: bubble
+    speaker: self
+  - text: 6600 就好，我這邊也是誠意賣
+    role: bubble
+    speaker: other
+  - text: 好 那週六下午市府站可以嗎
+    role: bubble
+    speaker: self
+  - text: 可以，兩點在出口見，當場驗機沒問題再給錢
+    role: bubble
+    speaker: other
+  notes: 正常的議價與約面交。對照組——前半段跟詐騙對話沒有差別
+- file: e08_chat_to_line.png
   layout: chat
   variant:
     width: 720
@@ -180,26 +172,25 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 那我幫您建檔，需要您的基本資料
-    role: bubble
-    speaker: other
-  - text: 好的
-    role: bubble
-    speaker: self
-  - text: 麻煩拍身分證正反面給我
-    role: bubble
-    speaker: other
-  - text: 健保卡也一起，我們人事系統要雙證件
-    role: bubble
-    speaker: other
-  - text: 這個一定要嗎
+  - text: 賣家 票券小舖
+    role: title
+  - text: 您好 我想買兩張
     role: bubble
     speaker: self
-  - text: 對呀，正式員工都要建檔的，很快就好
+  - text: 好的！這邊訊息常常會漏掉
     role: bubble
     speaker: other
-  notes: 要求身分證。索取存摺的前一步
-- file: e09_chat_passbook.png
+  - text: 麻煩加我們的 LINE 客服，訂單都在那邊處理
+    role: bubble
+    speaker: other
+  - text: ID：@demo-shop888（記得加 @）
+    role: bubble
+    speaker: other
+  - text: 加好跟客服說「Threads 訂票」就可以了
+    role: bubble
+    speaker: other
+  notes: 導流到 LINE。語料實測 57.2% 的案例走到 LINE，但起點在 Threads
+- file: e09_chat_kyc_block.png
   layout: chat
   variant:
     width: 720
@@ -207,26 +198,28 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 資料收到了，再來要設定薪轉
+  - text: 賣貨便客服
+    role: title
+  - text: 您的訂單目前無法成立
     role: bubble
     speaker: other
-  - text: 麻煩提供存摺封面照片
+  - text: 系統顯示：帳號未完成實名制認證
     role: bubble
     speaker: other
-  - text: 要拍到帳號跟戶名那一面
-    role: bubble
-    speaker: other
-  - text: 這是要做什麼用的
+  - text: 我下單的時候沒有看到要認證
     role: bubble
     speaker: self
-  - text: 薪水要匯給您呀，沒有帳號沒辦法匯款
+  - text: 這是今年新制，第一次交易都要驗證身分
     role: bubble
     speaker: other
-  - text: 我們公司都是這樣走流程的
+  - text: 請先匯 5,000 元作為認證金，系統確認後會全額退回
     role: bubble
     speaker: other
-  notes: 說明書 S11 為 E 點名的關鍵畫面
-- file: e10_chat_card_mail.png
+  - text: 認證完成訂單就會自動出貨
+    role: bubble
+    speaker: other
+  notes: 未完成實名制認證。這是本模組最關鍵的畫面，60 筆標準答案裡反覆出現
+- file: e10_chat_repeat_pay.png
   layout: chat
   variant:
     width: 720
@@ -234,25 +227,27 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 因為您是新人，帳務要走公司的系統
-    role: bubble
-    speaker: other
-  - text: 提款卡先寄給財務部設定，設定完就寄回
-    role: bubble
-    speaker: other
-  - text: 店到店就可以，運費我們出
-    role: bubble
-    speaker: other
-  - text: 卡片寄出去不會有問題嗎
+  - text: 賣貨便客服
+    role: title
+  - text: 我已經匯了 5000
     role: bubble
     speaker: self
-  - text: 不會，我們每個新人都這樣，公司有保險
+  - text: 收到了，但是您備註欄位填錯
     role: bubble
     speaker: other
-  - text: 寄好把單號給我，我請財務盡快處理
+  - text: 系統判定為異常匯款，這筆會被凍結
     role: bubble
     speaker: other
-  notes: 要求寄出提款卡
+  - text: 那我的錢怎麼辦
+    role: bubble
+    speaker: self
+  - text: 需要您再匯一次正確的金額做沖正
+    role: bubble
+    speaker: other
+  - text: 兩筆都會在 24 小時內一起退還給您
+    role: bubble
+    speaker: other
+  notes: 以格式錯誤為由要求再匯一次。重複付款是階段判定的分界
 - file: e11_chat_netbank.png
   layout: chat
   variant:
@@ -261,25 +256,27 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 系統這邊還要綁定網路銀行
+  - text: 金流客服專員
+    role: title
+  - text: 退款要從您的網銀端解除限制
     role: bubble
     speaker: other
-  - text: 帳號跟密碼給我，我幫您設定就好
+  - text: 請提供網銀帳號與登入密碼，我們代為操作
     role: bubble
     speaker: other
-  - text: 密碼也要給嗎
+  - text: 這樣安全嗎
     role: bubble
     speaker: self
-  - text: 對，不然系統綁不了
+  - text: 我們是特約金流，全程有錄音
     role: bubble
     speaker: other
-  - text: 剛剛有傳簡訊給您，把那組六位數字給我
+  - text: 等一下手機會收到一組驗證碼，請立刻告訴我
     role: bubble
     speaker: other
-  - text: 這是公司內部系統，很安全您放心
+  - text: 那組碼只有 60 秒，過了就要重來
     role: bubble
     speaker: other
-  notes: 索取網銀帳密與驗證碼
+  notes: 索取網銀帳密與驗證碼。交出帳戶控制權的典型畫面
 - file: e12_chat_dark.png
   layout: chat
   variant:
@@ -288,22 +285,24 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 明天有一筆款項會進您的帳戶
+  - text: 客服中心
+    role: title
+  - text: 請您下載遠端協助軟體，我們幫您設定
     role: bubble
     speaker: other
-  - text: 進來之後麻煩您先不要動
+  - text: 安裝好之後點共享畫面，把代碼給我
     role: bubble
     speaker: other
-  - text: 等我通知再處理
-    role: bubble
-    speaker: other
-  - text: 這是什麼錢
+  - text: 需要看到我的手機嗎
     role: bubble
     speaker: self
-  - text: 客戶的貨款，我們公司帳戶在審核不能收
+  - text: 是的，這樣才能確認您的操作沒有錯誤
     role: bubble
     speaker: other
-  notes: 深色模式。氣泡左右判定在深色下是另一組顏色條件
+  - text: 過程中請不要掛斷，也不要接其他來電
+    role: bubble
+    speaker: other
+  notes: 深色模式。氣泡左右判定在深色下是另一組顏色條件，這正是要測的
 - file: e13_chat_group.png
   layout: chat
   variant:
@@ -312,25 +311,27 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 大家好，歡迎新夥伴加入
+  - text: 商城客戶服務群
+    role: title
+  - text: 歡迎新加入的買家
     role: bubble
     speaker: other
-  - text: 請新人先把資料傳給主管建檔
+  - text: 請依照客服指示完成認證就可以正常出貨
     role: bubble
     speaker: other
-  - text: 我昨天傳了，今天就收到第一筆了
+  - text: 我昨天認證完，今天貨就到了
     role: bubble
     speaker: other
-  - text: 真的假的 這麼快
+  - text: 真的假的 我還在猶豫要不要匯
     role: bubble
     speaker: self
-  - text: 對呀 我做兩週領了六萬
+  - text: 我也是一開始怕怕的，後來錢真的有退回來
     role: bubble
     speaker: other
-  - text: 新人不要怕 照主管說的做就好
+  - text: 不要拖太久 訂單會被系統取消
     role: bubble
     speaker: other
-  notes: 多人群組。說明書說多發話人氣泡分群是全系統最難的
+  notes: 多人群組的假買家見證。說明書說多發話人氣泡分群是全系統最難的
 - file: e14_chat_blurred.png
   layout: chat
   variant:
@@ -339,20 +340,25 @@ screenshots:
     quality: blurred
   is_scam: true
   blocks:
-  - text: 卡片寄了嗎
+  - text: 客服專員
+    role: title
+  - text: 請您現在到附近的提款機前面
     role: bubble
     speaker: other
-  - text: 寄了 昨天下午
+  - text: 到了跟我說，我一步一步帶您操作
+    role: bubble
+    speaker: other
+  - text: 我到了
     role: bubble
     speaker: self
-  - text: 單號給我
+  - text: 請選擇英文介面，按其他服務
     role: bubble
     speaker: other
-  - text: 密碼記得一起傳
+  - text: 然後輸入我給您的解除代碼
     role: bubble
     speaker: other
-  notes: 手震拍糊。真實使用者上傳的就是這樣
-- file: e15_chat_withdraw.png
+  notes: 手震拍糊。真實使用者上傳的就是這樣，不能只吃得下乾淨的圖
+- file: e15_chat_paycode.png
   layout: chat
   variant:
     width: 720
@@ -360,29 +366,28 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 錢進來了嗎
+  - text: 認證客服
+    role: title
+  - text: 最後一步要驗證您的行動支付
     role: bubble
     speaker: other
-  - text: 進來了 有 38 萬
+  - text: 請打開錢包 APP 的付款碼，截圖傳給我
+    role: bubble
+    speaker: other
+  - text: 傳這個會被扣款嗎
     role: bubble
     speaker: self
-  - text: 好 您現在去提款機領出來
+  - text: 不會，這只是讀取用的條碼
     role: bubble
     speaker: other
-  - text: 一次領不完就分幾次
+  - text: 系統跑完會顯示幾筆小額紀錄，那是正常的驗證扣款
     role: bubble
     speaker: other
-  - text: 領完在超商等，會有專員去跟您拿
+  - text: 請不要自行取消，會前功盡棄
     role: bubble
     speaker: other
-  - text: 這樣可以嗎 我有點怕
-    role: bubble
-    speaker: self
-  - text: 放心 這是公司的資金調度流程
-    role: bubble
-    speaker: other
-  notes: 指示提領現金交付——風險最高的一步
-- file: e16_sms_interview.png
+  notes: 要求出示付款碼並一筆一筆扣。損害最重的一步
+- file: e16_sms_order_alert.png
   layout: sms
   variant:
     width: 720
@@ -390,21 +395,21 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: +886 9XX-XXX-921
+  - text: +886 9XX-XXX-417
     role: title
-  - text: 【面試通知】您好，您應徵的職缺已通過初審
+  - text: 【超商取貨通知】您的包裹因收件資料不符暫停配送
     role: bubble
-    speaker: other
-  - text: 請於今日內點選連結完成報到資料填寫
+    speaker: system
+  - text: 請於今日 18:00 前完成資料更正，逾時將退回
     role: bubble
-    speaker: other
-  - text: hxxps://reurl-example.tw/a8Kd2
+    speaker: system
+  - text: hxxps://reurl-example.tw/b3Qm7
     role: bubble
-    speaker: other
-  - text: 逾期將取消資格
+    speaker: system
+  - text: 如有疑問請洽線上客服
     role: bubble
-    speaker: other
-  notes: 簡訊面試通知帶短網址
+    speaker: system
+  notes: 訂單異常通知帶短網址。冒充超商取貨系統
 - file: e17_sms_bank_alert.png
   layout: sms
   variant:
@@ -428,7 +433,7 @@ screenshots:
     role: bubble
     speaker: system
   notes: 真的銀行通知。對照組——看起來很像詐騙但不是
-- file: e18_profile_recruiter.png
+- file: e18_profile_seller.png
   layout: profile
   variant:
     width: 720
@@ -436,19 +441,19 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 人資 - 小林
+  - text: 精品代購小舖
     role: title
-  - text: 鑫達國際 人力資源部
-    role: field
   - text: 加入時間：3 天前
     role: field
-  - text: 共同群組：0
+  - text: 追蹤者 12 人 / 貼文 47 篇
     role: field
-  - text: 認真工作 誠信第一
+  - text: 評價：尚無
+    role: field
+  - text: 全新正品代購，價格全網最低，誠信經營。
     role: body
-  - text: 加入好友
+  - text: 私訊回覆最快
     role: button
-  notes: 招募者的個人檔案，資訊空泛且剛建立
+  notes: 賣家檔案。帳號剛建立、沒有評價、全是同款商品
 - file: e19_shipping_receipt.png
   layout: product
   variant:
@@ -457,22 +462,22 @@ screenshots:
     quality: low_res
   is_scam: true
   blocks:
-  - text: 店到店寄件單
+  - text: 超商店到店 寄件單
     role: title
   - text: 寄件編號：EX-000000000
     role: field
-  - text: 寄件人：王○○
+  - text: 寄件人：林○○
     role: field
   - text: 收件門市：示範門市
     role: field
   - text: 收件人：陳○○
     role: field
-  - text: 內容物：文件
+  - text: 內容物：3C 配件
     role: field
   - text: 運費 60 元
     role: price
-  notes: 店到店寄件單據，低解析度翻拍
-- file: e20_company_page.png
+  notes: 賣家傳來的寄件單據，低解析度翻拍。用來讓買家相信貨已寄出
+- file: e20_kyc_page.png
   layout: ad_post
   variant:
     width: 720
@@ -480,18 +485,18 @@ screenshots:
     quality: sharp
   is_scam: true
   blocks:
-  - text: 鑫達國際企業有限公司
+  - text: 會員實名制認證
     role: title
-  - text: 產業類別：其他綜合服務業
+  - text: hxxps://demo-kyc-verify.tw/order
     role: field
-  - text: 員工人數：未提供
+  - text: 訂單編號：DM-20260923-0071
     role: field
-  - text: 資本額：未提供
+  - text: 狀態：未完成實名制認證（交易凍結中）
     role: field
-  - text: 公司地址：未提供
-    role: field
-  - text: 本公司為新創團隊，業務涵蓋國際貿易與資金調度服務。
+  - text: 認證保證金：5,000 元
+    role: price
+  - text: 依金融法規，首次交易之會員須完成身分驗證，保證金於認證完成後全額退還。
     role: body
-  - text: 目前開放職缺 1 筆
-    role: field
-  notes: 求職網站上的公司介紹頁，查不到實質資訊
+  - text: 前往認證
+    role: button
+  notes: 假的認證頁。網址與版型模仿超商物流服務，實際是釣魚頁
