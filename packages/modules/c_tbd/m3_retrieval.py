@@ -431,21 +431,35 @@ def search(query: str, *, top_k: int = 5, cases: list[Case] | None = None) -> li
 
     漏接第二種的後果是：沒裝 torch 的組員一查詢就看到例外，而不是安靜地
     用關鍵字檢索 —— 而那正是三層退路存在的意義。
+
+    反過來，第 1 層成功但沒有任何一筆過 min_score **不是失敗**，會回空清單，
+    不落到關鍵字。細節見下面哨兵那段註解。
     """
     pool = cases if cases is not None else load_local()
     if not pool:
         return []
 
-    hits: list[tuple[Case, float]] = []
+    # 🔴 哨兵用 None，不能用空清單。
+    #
+    # 「第 1 層失敗」與「第 1 層成功但沒東西過 min_score」是兩件事，混為一談
+    # 會讓 min_score 永遠沒機會生效：它把離題問句擋下來、回了空清單，反而正好
+    # 觸發退路，交給完全沒有門檻的第 3 層 —— 而第 3 層保證回得出東西。
+    #
+    # 實測（10,051 筆索引、min_score=0.6）：「今天天氣如何」沒有任何一筆過門檻，
+    # 修掉之前 search() 會回三筆投資詐騙案例給使用者。
+    #
+    # 退路是為了接住失敗，不是為了保證一定有結果。查不到就是查不到 ——
+    # 外殼對「尚未涵蓋」本來就有處理（通用建議＋165 導流）。
+    hits: list[tuple[Case, float]] | None = None
     if MODEL_READY:
         try:
             hits = Retriever(cases=pool, store_path=INDEX_PATH).retrieve(query, k=top_k)
         except (models.ModelNotSelectedError, models.ModelDependencyError):
-            hits = []  # 落到第 3 層。這是預期內的狀態，不是錯誤
+            hits = None  # 落到第 3 層。這是預期內的狀態，不是錯誤
         except FileNotFoundError:
             # 索引還沒建（make index MODULE=c_tbd 還沒跑過）。也是預期內的。
-            hits = []
-    if not hits:
+            hits = None
+    if hits is None:
         hits = _keyword_search(query, pool, top_k)
 
     out: list[SimilarCase] = []

@@ -32,6 +32,7 @@ from packages.modules.c_tbd.m3_retrieval import (
     NumpyStore,
     Retriever,
     _import_numpy,
+    _keyword_search,
     search,
 )
 
@@ -297,7 +298,38 @@ def test_沒裝套件的人查詢要退到關鍵字而不是看到例外():
     """三層退路的意義就在這裡：漏接 ModelDependencyError 的話，沒裝 torch
     的組員一查詢就炸，而不是安靜地用關鍵字檢索。"""
     hits = search("我在臉書看到投資廣告", cases=_cases())
-    assert hits  # 不管第 1 層成不成功，都一定要有結果
+    assert hits  # 相關問句一定要有結果（離題問句可以是空的，見下一條）
+
+
+def test_第一層擋光了就是沒有相關案例不該被退路補上(monkeypatch):
+    """min_score 擋掉全部時，那是「沒有相關案例」，不是「第 1 層失敗」。
+
+    退路是為了接住失敗（沒裝套件、沒建索引），不是為了保證一定有結果。
+    兩者混為一談的話 min_score 永遠沒機會生效 —— 它把離題問句擋下來、
+    回了空清單，反而正好觸發退路，交給完全沒有門檻的關鍵字檢索。
+
+    實測（10,051 筆索引、min_score=0.6）：「今天天氣如何」沒有任何一筆
+    過門檻，但修掉之前 search() 會回三筆投資詐騙案例給使用者。
+
+    這裡不靠真索引與真問句 —— 那會讓斷言取決於語料裡剛好有什麼字。
+    直接把第 1 層換成「成功但沒東西過門檻」，測的就是那道接縫本身。
+
+    ⚠ 問句必須是關鍵字撈得到的那種，否則第 3 層本來就回空，這條測試會
+      在沒修的情況下也通過 —— 測不出東西的測試比沒有測試更糟。
+    """
+    monkeypatch.setattr(Retriever, "retrieve", lambda self, *a, **k: [])
+    assert _keyword_search("臉書投資廣告出不了金", _cases(), 5), "前提：第 3 層撈得到"
+    assert search("臉書投資廣告出不了金", cases=_cases()) == []
+
+
+def test_第一層壞掉才落到關鍵字(monkeypatch):
+    """跟上一條成對：例外才是「失敗」，空清單不是。"""
+
+    def boom(self, *a, **k):
+        raise models.ModelDependencyError("這台沒裝 ml 那組套件")
+
+    monkeypatch.setattr(Retriever, "retrieve", boom)
+    assert search("投資廣告出不了金", cases=_cases())
 
 
 # ── 沒裝 numpy 的機器（= CI，= 照 README 跑 make install 的人）─────────────
