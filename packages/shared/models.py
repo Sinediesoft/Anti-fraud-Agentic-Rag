@@ -99,8 +99,10 @@ MODEL_LOCK: dict[str, ModelLock] = {
     "cloud": ModelLock("cloud", "TODO-S3", "", "", ""),
     # OCR：只管「認字」—— 找出截圖上的文字行，回每行的字、座標、信心分數。
     # 版面判斷、併成氣泡、分出誰說的都跟平台有關，留在各模組的 M2。
-    # 候選 RapidOCR / PaddleOCR / Tesseract，S11 用全隊的截圖量完 CER 再鎖。
-    # 三個候選的跨平台差異見 docs/model-lock.md 的「OCR（S11）」一節。
+    # 建議 RapidOCR ＋ PP-OCRv6 small（E 的 20 張錯字率 0.019，備案 v5 mobile 0.031），
+    # 但只量過 E 的截圖 —— A、C 的量完再鎖。revision 要對應到模型檔的 SHA-256，
+    # 不是 rapidocr 的套件版本：RapidOCR 預設跑的是表現最差的 v4 mobile。
+    # 實測與鎖定清單見 docs/model-lock.md 的「OCR（S11）」一節。
     "ocr": ModelLock("ocr", "TODO-S11", "", "", ""),
 }
 
@@ -419,7 +421,9 @@ OCR_ENGINES: dict[str, Callable[[], OcrEngine]] = {}
 OCR_CACHE_SIZE = 32
 
 # 引擎跟 _EMBEDDER 一樣，一個 process 只載一次、載了就常駐，不做閒置釋放：
-# 常駐只佔幾百 MB，而閒置後重載的那一兩秒會直接吃掉 S12 的 1 秒預算。
+# 閒置後重載的那段時間會直接吃掉 S12 的 1 秒預算。代價是記憶體 —— 實測 RapidOCR
+# 一個 process 約 1.6 GB（原本估計幾百 MB，低估約五倍），加上 bge-m3 約 4.8 GB。
+# 8 GB 的機器放不下時，這個決定要重新評估（見 docs/model-lock.md）。
 _OCR_ENGINE: tuple = ()
 _OCR_CACHE: OrderedDict[str, OcrResult] = OrderedDict()
 
