@@ -47,11 +47,20 @@ DECISIVE_TERMS = (
 )
 
 
-class JobBoardMuleModule:
-    """模組 E：求職平台 × 人頭帳戶。
+class ThreadsShoppingModule:
+    """模組 E：Threads × 網路購物詐騙。
 
-    使用者可能是在應徵工作的過程中交出帳戶的人。這一組跟另外四組的差別在於，
-    他同時是被害人，也可能成為被調查的對象——行動劇本要處理這件事。
+    題目在 2026-09-22 從「求職平台 × 人頭帳戶」改過來（見 REPORT §1），
+    class 名到 09-23 才跟著改。
+
+    這一組的主流程是「貼文 → 私訊 → 假物流連結 → 實名認證話術 → 假客服」，
+    9,167 筆語料中 47.5% 出現假物流連結、39.5% 出現實名認證話術。
+    跟另外四組的差別有兩點：
+
+    1. **57.2% 的案例會導流到 LINE**，但起點仍在 Threads（99.5% 的案例
+       Threads 出現在其他平台之前），所以整條算這個模組的。
+    2. 少數案例會走到寄出提款卡——那時使用者同時是被害人，也可能被列為
+       警示戶甚至被調查，行動劇本的 credentials 那一級要處理這件事。
     """
 
     def __init__(self) -> None:
@@ -162,6 +171,6 @@ class JobBoardMuleModule:
         )
 
 
-def build_module() -> JobBoardMuleModule:
+def build_module() -> ThreadsShoppingModule:
     """外殼靠這個工廠函式拿到實例。函式名稱不能改（contracts.ENTRYPOINT_FACTORY）。"""
-    return JobBoardMuleModule()
+    return ThreadsShoppingModule()
