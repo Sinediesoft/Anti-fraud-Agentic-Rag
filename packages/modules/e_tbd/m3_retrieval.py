@@ -50,7 +50,26 @@ CASE_IDS = INDEX_DIR / "case_ids.json"
 
 EMBED_BATCH = 32
 POOL = 50  # 每一路各取前 N 名進入 RRF
-RRF_K = 60  # Cormack et al. 2009 的經驗值
+
+# RRF 的 K 與各路權重。Cormack et al. 2009 的原始建議是 K=60、兩路等權，
+# 那個設定假設兩路品質相當 —— 這裡不是。2026-09-23 向量庫建好後實測（20 題）：
+#
+#     只用 BM25             Top-1 0.450  R@5 0.650  R@10 0.650
+#     只用語意向量           Top-1 0.050  R@5 0.300  R@10 0.300
+#     K=60 等權（原設定）     Top-1 0.400  R@5 0.600  R@10 0.700
+#     K=10 + BM25 權重 2    Top-1 0.450  R@5 0.700  R@10 0.750
+#
+# 等權融合下來比單用 BM25 還差 —— 弱的那一路把強的擠掉了。K 調小會放大前幾名
+# 的差距，權重則直接反映兩路實測的落差；兩者一起用，融合才終於不比單路差。
+#
+# 向量為什麼這麼弱：這批案例高度同質（71.5% 同一個 label，都在講賣貨便加實名
+# 認證），語意上本來就分不開，區辨資訊幾乎都在專有名詞上，那是 BM25 的主場。
+#
+# ⚠ 只有 20 題，而且那 20 題是從 gold 案例改寫的、保留了專有名詞，本來就對詞彙
+# 比對有利。這組參數只能說「融合不再比單路差」，不等於調好了。要有把握得先有
+# 一份專門的檢索評估集（口語、避開專有名詞、每題標 gold 案例編號）。
+RRF_K = 10
+RRF_WEIGHTS = {"bm25": 2.0, "dense": 1.0}
 
 # BM25 參數。k1 控制詞頻飽和、b 控制長度正規化，兩個都是文獻通用值。
 BM25_K1 = 1.5
@@ -218,19 +237,22 @@ def search(query: str, *, top_k: int = 5, cases: list[Case] | None = None) -> li
 
     by_id = {c.case_id: c for c in pool}
     rankings: list[list[str]] = []
+    weights: list[float] = []
 
     bm25 = _bm25(pool).scores(query)
     if bm25:
         rankings.append(sorted(bm25, key=lambda cid: -bm25[cid])[:POOL])
+        weights.append(RRF_WEIGHTS["bm25"])
 
     dense = _vector_scores(query, pool)
     if dense:
         rankings.append(sorted(dense, key=lambda cid: -dense[cid])[:POOL])
+        weights.append(RRF_WEIGHTS["dense"])
 
     if not rankings:
         return []
 
-    fused = reciprocal_rank_fusion(*rankings)
+    fused = reciprocal_rank_fusion(*rankings, weights=weights)
     # 單路時 RRF 分數等同名次倒數，資訊量不如原始分數，所以拿原始分數當 score
     single = bm25 if len(rankings) == 1 else None
     best = max(single.values()) if single else 0.0
@@ -269,14 +291,22 @@ def _rrf_norm(fused: list[str], case_id: str) -> float:
     return max(0.0, 1.0 - (rank - 1) / max(len(fused), 1))
 
 
-def reciprocal_rank_fusion(*rankings: list[str], k: int = RRF_K) -> list[str]:
+def reciprocal_rank_fusion(
+    *rankings: list[str], k: int = RRF_K, weights: list[float] | None = None
+) -> list[str]:
     """RRF：兩邊都排前面的，最後就排前面。
 
     用它而不是分數加權，是因為 BM25 與餘弦相似度的尺度差很遠且都沒校準，
     要加權就得先正規化，而正規化的參數本身沒有依據。RRF 只看名次。
+
+    `weights` 加在名次上而不是分數上，所以仍然不需要正規化任何東西 ——
+    它表達的是「這一路的名次比較可信」，不是「這一路的分數比較高」。
+    不給就是等權（原始論文的設定）。
     """
+    if weights is None:
+        weights = [1.0] * len(rankings)
     scores: dict[str, float] = {}
-    for ranking in rankings:
+    for ranking, weight in zip(rankings, weights, strict=True):
         for rank, doc_id in enumerate(ranking, start=1):
-            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+            scores[doc_id] = scores.get(doc_id, 0.0) + weight / (k + rank)
     return [doc for doc, _ in sorted(scores.items(), key=lambda kv: kv[1], reverse=True)]
