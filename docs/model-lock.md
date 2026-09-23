@@ -3,7 +3,7 @@
 > 壓縮程度也算版本。同一個模型壓得多跟壓得少表現差很多 ——
 > 五個人要用同一份檔案，不是同一個名字。
 
-**狀態：SLM 與嵌入模型已鎖定（2/4）。** 這張表改動時要同步更新
+**狀態：SLM 與嵌入模型已鎖定（2/5）。** 這張表改動時要同步更新
 `packages/shared/models.py` 的 `MODEL_LOCK`，兩邊不一致會讓分數對不起來。
 
 | 用途 | 模型名 | 版本編號 | 壓縮格式 | 鎖定日期 |
@@ -12,6 +12,7 @@
 | **嵌入模型** | **`BAAI/bge-m3`** | **`5617a9f6…aefb181`** | **fp32** | **2026-09-20** |
 | 重排序模型 | TODO ← **過不了門檻**，待架構決議 | | | |
 | 雲端模型 | TODO ← 尚無人評估 | | | |
+| OCR（認字） | TODO ← S11 用全隊截圖量完 CER 再鎖，見下方「OCR（S11）」 | | | |
 
 嵌入模型的完整 SHA：`5617a9f61b028005a4858fdac845db406aefb181`
 
@@ -36,6 +37,39 @@
 > 各自用 `ollama list` 對 ID，不一致的人要 `ollama pull` 重拉。
 >
 > 一併鎖定 **`num_ctx = 8192`**（見下方實測），已寫進 `shared/models.py` 的 `NUM_CTX`。
+
+## OCR（S11）
+
+2026-09-23 起認字收進 `shared.models.ocr()`，跟嵌入模型一樣全隊鎖同一套。
+為什麼、以及哪些留在模組，見 `docs/architecture.md` 的「截圖怎麼走」。
+
+### 三個候選的跨平台狀況（2026-09-23 查 PyPI，Python 3.11）
+
+| | Windows x64 | macOS Apple Silicon | 怎麼裝 | 模型檔從哪來 |
+|---|---|---|---|---|
+| RapidOCR 3.9.2 | ✅ onnxruntime 1.30.0 有 `cp311-win_amd64` | ✅ 有 `cp311-macosx_14_0_arm64`（A 是 macOS 26，夠） | 純 pip，`uv.lock` 鎖得住 | 安裝包 26 MiB，**推測**預設模型已包在裡面（未拆包驗證） |
+| PaddleOCR 3.7.0 | ✅ paddlepaddle 3.3.1 有 `cp311-win_amd64` | ✅ 有 `cp311-macosx_11_0_arm64` | pip 可裝，paddlepaddle 約 100 MiB，另拉 `paddlex`、`requests`、`aiohttp` | 安裝包 0.1 MiB，**模型在第一次執行時才連網下載** —— 版本由上游決定、展示現場沒網路就卡住 |
+| Tesseract | ✅ 另跑 UB Mannheim 安裝檔 | ✅ 另跑 `brew install tesseract tesseract-lang` | **不是 pip 套件**，`uv sync` 裝不到；兩邊的版本與中文語言檔要各自對齊 | 語言檔自己放 |
+
+三個都跑得動 CPU，所以都不佔 4 GB 顯卡（SLM 已經用掉 2.1–2.3 GB）。**不要用
+Ollama 的視覺語言模型當 OCR**：`qwen2.5-vl:3b` 本身就超過 3 GB，跟 SLM 塞不進同一張
+4 GB 卡，而 Ollama 不會報錯，只會安靜地換模型或丟回 CPU。
+
+### 記憶體（C 實測 bge-m3 那一段；OCR 那一段是估計，S11 要實測）
+
+同一個 process 裡：import torch + transformers 私有記憶體 425 MiB，載入 bge-m3 並嵌入後
+3,057–3,182 MiB，顯卡 0 MiB（釘死 CPU 的效果）。OCR 收進共用層後只載一份：RapidOCR
+估計多 0.1–0.3 GB、PaddleOCR 估計多 1–2 GB。引擎載了就常駐、不做閒置釋放 —— 省下的
+記憶體不多，閒置後重載的那一兩秒卻會直接吃掉 S12 的 1 秒預算。
+
+### 鎖定時要做的事
+
+1. 三個引擎各認全隊所有截圖，用 `shared.eval.cer()` **依平台分開**算錯字率。
+   同一套在每個平台都 ≤ 0.15 就鎖它；某個平台只有換引擎才過得了，再回頭討論。
+2. 填 `MODEL_LOCK["ocr"]` 與上面那張表（`tools/check_model_lock_sync.py` 會比對）。
+3. 在 `shared/models.py` 的 `OCR_ENGINES` 接上那個引擎的 adapter：延遲 import、
+   收 bytes（`cv2.imread` 在 Windows 讀不了中文路徑）、回 `list[OcrLine]`，
+   四邊形框轉成 `(x0, y0, x1, y1)`。套件放進 pyproject 的 extra，別放進必裝。
 
 ## 候選（說明書 S3）
 

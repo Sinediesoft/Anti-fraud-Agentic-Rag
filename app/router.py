@@ -4,6 +4,9 @@
 
 外殼不需要懂任何一種詐騙 —— 每個模組自己判斷「這像不像我」，外殼只負責比大小。
 所以新增第六個模組時，外殼一行都不用改。
+
+問之前先做一件事：有截圖就先認一次字（_read_images）。這不是外殼在判讀，
+只是讓後面每個模組拿到的都是快取 —— 認字本身跟哪一種詐騙無關。
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ import time
 from dataclasses import dataclass, field
 
 from contracts import AnalyzeInput, TraceEvent
+from shared import models
 
 from .registry import LoadedModule, Registry
 
@@ -50,11 +54,47 @@ def _ask(module: LoadedModule, payload: AnalyzeInput) -> tuple[float, TraceEvent
     )
 
 
+def _read_images(payload: AnalyzeInput) -> list[TraceEvent]:
+    """有截圖就在路由之前先認一次字，把結果放進 shared.models.ocr() 的快取。
+
+    為什麼在這裡做：每個模組的 can_handle() 都要看截圖上的字，認領的模組
+    analyze() 又要再看一次。這裡先認過，後面那些呼叫全部是快取命中 ——
+    同一張圖從「模組數 + 認領數」次降到 1 次。
+
+    認不出來不擋路由：模組自己有退路（只看打字的內容），這裡只記一筆。
+    名字用 route: 開頭，app/ui.py 算總耗時時才會把它算進外殼的那一段。
+    """
+    if not payload.images:
+        return []
+    started = time.perf_counter()
+    failures: list[str] = []
+    for image in payload.images:
+        try:
+            models.ocr(image.path)
+        except Exception as exc:  # 認字失敗要降級，不是讓整個路由當掉
+            failures.append(f"{type(exc).__name__}: {exc}")
+    total = len(payload.images)
+    return [
+        TraceEvent(
+            step="route:ocr",
+            duration_ms=(time.perf_counter() - started) * 1000,
+            status="degraded" if failures else "ok",
+            detail=(
+                f"認出 {total - len(failures)}/{total} 張；{failures[0]}"
+                if failures
+                else f"認出 {total}/{total} 張"
+            ),
+        )
+    ]
+
+
 def route(registry: Registry, payload: AnalyzeInput, *, manual: str | None = None) -> RouteDecision:
     """決定這題給誰。
 
     manual 是畫面上的手動切換 —— 那是最後一道保險，路由再怎麼準都要留著（S18）。
     """
+    ocr_trace = _read_images(payload)
+
     if manual:
         forced = registry.get(manual)
         if forced is not None:
@@ -62,12 +102,13 @@ def route(registry: Registry, payload: AnalyzeInput, *, manual: str | None = Non
                 primary=forced,
                 scores={forced.id: 1.0},
                 trace=[
-                    TraceEvent(step="route:manual", duration_ms=0.0, detail=f"手動指定 {manual}")
+                    *ocr_trace,
+                    TraceEvent(step="route:manual", duration_ms=0.0, detail=f"手動指定 {manual}"),
                 ],
             )
 
     scores: dict[str, float] = {}
-    trace: list[TraceEvent] = []
+    trace: list[TraceEvent] = list(ocr_trace)
     claimed: list[tuple[LoadedModule, float]] = []
     hinted: list[tuple[LoadedModule, float]] = []
 

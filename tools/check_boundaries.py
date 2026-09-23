@@ -43,6 +43,17 @@ MODEL_PACKAGES = {
     "ctransformers",
     "optimum",
     "onnxruntime",
+    # OCR 引擎（2026-09-23 起認字走 shared.models.ocr）。原本只擋 onnxruntime，
+    # 但 import rapidocr 會過 —— 它底層跑的就是 onnxruntime。這裡只看 import 的
+    # 最外層名稱，抓不到間接相依，所以引擎套件要自己列出來。
+    "rapidocr",
+    "rapidocr_onnxruntime",
+    "paddleocr",
+    "paddle",
+    "paddlex",
+    "pytesseract",
+    "tesserocr",
+    "easyocr",
 }
 
 # 會連外網的套件。出網的口只有 shared.models 一個

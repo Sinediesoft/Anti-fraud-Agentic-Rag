@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tools.check_boundaries import scan_file, scan_module
 
 MODULES = Path(__file__).resolve().parent.parent / "packages" / "modules"
@@ -18,6 +20,16 @@ def test_現有模組都沒有越界():
 def test_擋下自己呼叫模型(tmp_path):
     f = tmp_path / "bad.py"
     f.write_text("import torch\n", encoding="utf-8")
+    assert any("shared.models" in v.message for v in scan_file(f, "a_tbd"))
+
+
+@pytest.mark.parametrize(
+    "line", ["import rapidocr\n", "from paddleocr import PaddleOCR\n", "import pytesseract\n"]
+)
+def test_擋下自己跑OCR引擎(tmp_path, line):
+    # rapidocr 底層就是 onnxruntime。只擋 onnxruntime 的話，這條會過
+    f = tmp_path / "bad.py"
+    f.write_text(line, encoding="utf-8")
     assert any("shared.models" in v.message for v in scan_file(f, "a_tbd"))
 
 
