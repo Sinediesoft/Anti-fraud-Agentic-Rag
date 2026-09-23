@@ -1,0 +1,81 @@
+# 20 題考題（說明書 S12 第 4 點、S14 第 3 點）—— 模組 D
+#
+# 每題寫成「受害者會怎麼講這件事」的白話查詢，至少 8 題完全不含專有名詞。
+# 出題太簡單會讓分數虛高。整個專案的起點就是「群組裡的老師叫我先入金才能出金」
+# 在官方站台 0 筆命中 —— 題目要逼近那個場景。
+#
+# 🔴 本模組出 plain 題特別重要。受害者在 S3「認證失敗」那一刻是被催著操作的，
+#    他不會打「7-11 賣貨便假冒客服」，他會打「他說我要認證才能收錢」。
+#    所以這裡 12 題 plain（超過門檻的 8 題），刻意把難度壓在真實語境上。
+#
+# 欄位：
+#   text          白話查詢
+#   gold_case_ids 正確答案的案例編號（S10 標的那 60 筆裡挑）
+#   plain         true 表示完全不含專有名詞
+#
+# TODO(W3)：gold_case_ids 目前全空，要等 M1 切出語料、S10 標完 60 筆才能填。
+#           沒有它就只能評「認不認得出是我的案子」，不能評 Recall@5。
+
+# ── 完全不含專有名詞的 12 題（plain）────────────────────────
+- text: 對方說我帳號沒有完成實名認證，不能收到貨款
+  gold_case_ids: []
+  plain: true
+- text: 他叫我加一個線上客服，說要幫我處理帳號的問題
+  gold_case_ids: []
+  plain: true
+- text: 買家傳了一個連結給我，說要我在那邊建立賣場
+  gold_case_ids: []
+  plain: true
+- text: 客服說我的帳戶要先驗證才能撥款，要我轉一筆錢過去
+  gold_case_ids: []
+  plain: true
+- text: 我照線上客服說的操作網銀轉帳，結果錢就不見了
+  gold_case_ids: []
+  plain: true
+- text: 對方說系統顯示未完成金流簽署，要我先付一筆錢解除
+  gold_case_ids: []
+  plain: true
+- text: 有人說要跟我買東西，傳了連結叫我照著下單
+  gold_case_ids: []
+  plain: true
+- text: 他說我是新賣家要先做實名認證才能交易
+  gold_case_ids: []
+  plain: true
+- text: 客服叫我去提款機做無卡提款，說這樣才能解除限制
+  gold_case_ids: []
+  plain: true
+- text: 客服要我把手機收到的驗證碼拍給他
+  gold_case_ids: []
+  plain: true
+- text: 客服傳了一張付款碼叫我翻拍再傳過去
+  gold_case_ids: []
+  plain: true
+- text: 我已經轉帳了，客服又說要再付一筆解凍金才能退款
+  gold_case_ids: []
+  plain: true
+
+# ── 含平台名稱的 8 題 ───────────────────────────────────────
+- text: 賣貨便說我要先實名認證才能開通收款
+  gold_case_ids: []
+  plain: false
+- text: 我在 7-11 賣貨便建了賣場，對方說我未完成金流簽署
+  gold_case_ids: []
+  plain: false
+- text: 全家好賣+ 的客服加我好友說我帳號有問題
+  gold_case_ids: []
+  plain: false
+- text: 對方叫我用 7-11 交貨便寄，然後傳了一個認證的連結給我
+  gold_case_ids: []
+  plain: false
+- text: 有個自稱 7-11 授權簽署中心的客服加我好友
+  gold_case_ids: []
+  plain: false
+- text: 賣貨便的線上客服說我帳號要驗證才能撥款
+  gold_case_ids: []
+  plain: false
+- text: 我用店到店寄貨，買家說他付不了款要我先去認證
+  gold_case_ids: []
+  plain: false
+- text: 宅配通的客服說我的包裹需要實名認證才能領
+  gold_case_ids: []
+  plain: false
