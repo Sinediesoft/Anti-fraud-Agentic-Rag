@@ -134,6 +134,7 @@ data/                    語料放這裡（不進版控）
 ## 文件
 
 - 🔴 **[說明書補充：跨平台差異](docs/說明書補充-跨平台差異.md)** ← Windows 組員動手前必讀
+- [進度同步](docs/進度同步/) ← 全隊要一起對齊的進度文件，RAG 架構與流程的現況圖在這裡
 - [架構](docs/architecture.md)
 - [GitHub 協作速查](docs/github-協作速查.md) ← 每天都會用
 - [模型版本表](docs/model-lock.md)
