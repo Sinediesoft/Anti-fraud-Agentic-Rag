@@ -7,6 +7,15 @@
 
 ## 引擎：rapidocr 3.9.2 內建的 PP-OCRv6 small（2026-09-23 選定）
 
+模型本身是 PaddleOCR（百度）的 PP-OCR 系列：v4／v5／v6 是 PaddleOCR 的模型世代，
+不是 rapidocr 的版本。RapidOCR 不訓練模型，它把 PaddleOCR 的官方模型轉成 ONNX，
+再配上前後處理的推論流程。兩邊都是 Apache-2.0，轉出來的 ONNX 沿用同樣的授權。
+寫報告時來源要分開寫：模型是 PaddleOCR，推論引擎與 ONNX 轉換是 RapidOCR。
+
+下面的數字是 RapidOCR 的 ONNX 版本在我們的截圖上量的。PaddleOCR 官方文件的數字
+（例如繁體辨識準確率 v4 mobile 0.32 -> v5 mobile 0.72）用的是原版模型與它自己的
+流程，前後處理的實作與參數都不同，兩邊不能直接比。
+
 用 e_tbd 那 20 張有標註的截圖（標註與畫面同源，共 1,430 字）實測，錯字率用
 shared.eval.corpus_cer 算，在 A 的 M5 上各自單獨跑：
 
