@@ -158,8 +158,9 @@ class ModuleA:
             return 0.0
 
         text = payload.text
-        for image in payload.images:
-            text += "\n" + m2_vision.read_screenshot(image).plain_text
+        # read_all 而不是逐張 read_screenshot：同一張圖被重複上傳時只算一次
+        for screen in m2_vision.read_all(payload.images):
+            text += "\n" + screen.plain_text
 
         score = m4_judgement.keyword_score(
             text,
@@ -191,6 +192,7 @@ class ModuleA:
     # ── 進入點 4 ────────────────────────────────────────────
     def health(self) -> HealthReport:
         """我準備好了沒。required=False 的項目壞了只會降級，不會擋啟動。"""
+        ocr_ok, ocr_detail = m2_vision.engine_status()
         checks = [
             HealthCheck(
                 name="pack",
@@ -212,12 +214,7 @@ class ModuleA:
                 detail="自己的語料檔還沒切出來（S9）" if not m1_corpus.load_local() else "",
                 required=False,
             ),
-            HealthCheck(
-                name="ocr",
-                ok=m2_vision.OCR_ENGINE is not None,
-                detail="OCR 引擎尚未選定（S11），有圖時會降級成純文字",
-                required=False,
-            ),
+            HealthCheck(name="ocr", ok=ocr_ok, detail=ocr_detail, required=False),
             HealthCheck(
                 name="models",
                 ok=models.all_locked(),

@@ -44,10 +44,22 @@ ml = [
     "transformers>=4.44",
     "sentencepiece>=0.2",  # bge-m3 是 XLM-RoBERTa 底，tokenizer 要它
 ]
-# TODO(S11)：OCR 引擎由各自比較後選定，但必須 macOS 與 Windows 都裝得起來
-#            —— 實務上就是 RapidOCR。PaddleOCR 在 Apple Silicon 常裝不起來。
-#            OpenCV 請用 opencv-python-headless，一般版在 CI(Linux) 需要 libGL 會失敗。
-ocr = []
+# OCR（S11）。OCR 引擎由各自比較後選定，但必須 macOS 與 Windows 都裝得起來
+# —— 實務上就是 RapidOCR。PaddleOCR 在 Apple Silicon 常裝不起來。
+#
+# 2026-09-23 模組 A 選定 rapidocr 3.9.2 內建的 PP-OCRv6 small（實測見
+# packages/modules/a_tbd/m2_vision.py）。預設不裝，跟 ml 那組一樣：
+# 沒裝的人截圖會降級成只用打字的內容，不會當掉。裝法：uv sync --extra ocr
+#
+# 🔴 rapidocr 釘死版本：模型檔包在套件裡，換版本等於換模型。
+#    onnxruntime 要自己列 —— rapidocr 3.x 把推論引擎拆成選配，不列就沒有引擎。
+#    OpenCV 請用 opencv-python-headless，一般版在 CI(Linux) 需要 libGL 會失敗；
+#    rapidocr 相依的一般版在下面 [tool.uv] 的 override-dependencies 蓋掉了。
+ocr = [
+    "rapidocr==3.9.2",
+    "onnxruntime>=1.20",
+    "opencv-python-headless>=4.5",
+]
 # TODO(S12)：向量庫由各自選定（Chroma / Qdrant）
 rag = []
 
@@ -65,6 +77,10 @@ packages = [
 
 [tool.uv]
 package = true
+# rapidocr 相依的是一般版 opencv-python（要 libGL，見 ocr 那組的註解）。
+# 用永遠不成立的 marker 把它蓋掉，改用 ocr 那組列的 headless 版 ——
+# 兩個套件提供的是同一個 cv2 模組，rapidocr 分不出差別。
+override-dependencies = ["opencv-python; sys_platform == 'never'"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
