@@ -9,6 +9,7 @@ from contracts import (
     ActionItem,
     AnalyzeInput,
     HealthReport,
+    ImageInput,
     ModuleInfo,
     PackSpec,
     Plan,
@@ -297,6 +298,27 @@ def test_白名單外的追問不自由發揮():
     chat.finish()
     out = _texts(chat.send("順便幫我查一下明天天氣"))
     assert "只能就這次判讀回答" in out
+
+
+def test_同一張截圖每次送出都再加一次也只算一張():
+    # 介面的上傳框會一直留著使用者放過的檔案，每次送出都把它們整批再交一次
+    chat = _session([_wrap(_假模組("a", 0.9))])
+    shot = ImageInput(path="/tmp/anti-fraud-uploads/aaa.png", filename="screenshot.png")
+
+    for text in ("我被騙了", "他叫我入金", "已經匯了三次"):
+        chat.add_images([shot])
+        chat.send(text)
+
+    assert len(chat.images) == 1
+
+
+def test_同檔名的不同截圖都要留著():
+    chat = _session([_wrap(_假模組("a", 0.9))])
+
+    chat.add_images([ImageInput(path="/tmp/anti-fraud-uploads/aaa.png", filename="image.png")])
+    chat.add_images([ImageInput(path="/tmp/anti-fraud-uploads/bbb.png", filename="image.png")])
+
+    assert len(chat.images) == 2
 
 
 def test_重新開始會清乾淨():

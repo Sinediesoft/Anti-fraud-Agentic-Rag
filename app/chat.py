@@ -254,7 +254,18 @@ class ChatSession:
         return out
 
     def add_images(self, images: list[ImageInput]) -> None:
-        self.images.extend(images)
+        """同一個檔案只加一次。
+
+        介面的上傳框會一直留著使用者放過的檔案，每次送出都把它們整批再交一次 ——
+        原本照單全收，送四次同一張圖就疊成四張，每個模組的路由與判讀都要把它們
+        各讀一遍。用路徑判斷就夠：介面存檔時用內容的雜湊當檔名（app/uploads.py），
+        路徑一樣就是同一張圖。
+        """
+        seen = {image.path for image in self.images}
+        for image in images:
+            if image.path not in seen:
+                self.images.append(image)
+                seen.add(image.path)
 
     def send(self, text: str) -> list[ChatMessage]:
         text = text.strip()

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import tempfile
 import threading
 from pathlib import Path
 
@@ -33,6 +32,7 @@ from shared import models  # noqa: E402
 
 from app.chat import ChatSession, Phase  # noqa: E402
 from app.shell import Shell  # noqa: E402
+from app.uploads import save_upload  # noqa: E402
 
 RISK_STYLE: dict[RiskLevel, tuple[str, str]] = {
     RiskLevel.UNKNOWN: ("⚪", "尚無法判斷"),
@@ -87,12 +87,8 @@ def _selection() -> str:
 
 
 def _uploads_to_images(uploads) -> list[ImageInput]:
-    images: list[ImageInput] = []
-    for up in uploads or []:
-        tmp = Path(tempfile.gettempdir()) / up.name
-        tmp.write_bytes(up.getvalue())
-        images.append(ImageInput(path=str(tmp), filename=up.name))
-    return images
+    # 存檔用內容雜湊當檔名 —— 同名的不同截圖才不會互相覆蓋（理由見 app/uploads.py）
+    return [save_upload(up.name, up.getvalue()) for up in uploads or []]
 
 
 def _render_trace(trace, scores, *, key: str) -> None:
