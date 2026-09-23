@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -20,6 +21,7 @@ from contracts import (
 from shared import models
 
 from . import m1_corpus, m2_vision, m4_judgement, m5_agent
+from .m1_corpus import EXCLUDE_PATTERN
 
 MODULE_DIR = Path(__file__).resolve().parent
 
@@ -89,6 +91,15 @@ class ThreadsShoppingModule:
             positive=list(self.pack.route_terms) + list(self.pack.labels_canon),
             negative=list(self.pack.negative_terms),
         )
+        # 模組界線：超商物流歸 D。命中就壓到門檻之下，但不歸零——
+        # 說明書 S7 的路由允許多模組同時命中，壓到 hint 區間讓外殼仍能提示
+        # 「你可能同時也遇到這個」，而完整判讀交給 D。
+        #
+        # 這裡跟 m1_corpus 用同一個 EXCLUDE_PATTERN：語料排除什麼，路由就排除什麼。
+        # 兩邊不一致的話，模組會認領自己語料裡根本沒有的案子。
+        if re.search(EXCLUDE_PATTERN, text):
+            return min(score, self.pack.thresholds.route_hint_min)
+
         platform_hit = any(t and t in text for t in self.pack.platform_terms)
         # 決定性訊號命中一個就拉到門檻之上，但有兩個前提：
         #

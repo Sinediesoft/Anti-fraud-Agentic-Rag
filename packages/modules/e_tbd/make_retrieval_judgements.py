@@ -34,8 +34,9 @@ import yaml
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent.parent))
 
-from modules.e_tbd import m3_retrieval as M  # noqa: E402
 from shared import deid  # noqa: E402
+
+from modules.e_tbd import m3_retrieval as M  # noqa: E402
 
 if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding="utf-8")

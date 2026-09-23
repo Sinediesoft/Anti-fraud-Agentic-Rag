@@ -27,7 +27,6 @@ import sys
 import tempfile
 import time
 import zlib
-from collections import Counter
 from pathlib import Path
 
 import yaml

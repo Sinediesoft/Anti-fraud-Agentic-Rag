@@ -24,7 +24,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent.parent.parent))
 
-from packages.modules.e_tbd.make_gold_sample import PAGE, STAGE_NAMES, STAGES, HINTS  # noqa: E402
+from packages.modules.e_tbd.make_gold_sample import HINTS, PAGE, STAGE_NAMES, STAGES  # noqa: E402
 
 if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -39,14 +39,17 @@ def main() -> int:
         print(f"找不到複核清單：{IDS}")
         return 1
     ids = json.loads(IDS.read_text(encoding="utf-8"))["case_ids"]
-    by_id = {json.loads(l)["case_id"]: json.loads(l)
-             for l in SAMPLE.read_text(encoding="utf-8").splitlines() if l}
+    by_id = {
+        json.loads(line)["case_id"]: json.loads(line)
+        for line in SAMPLE.read_text(encoding="utf-8").splitlines()
+        if line
+    }
 
     rows = []
     for cid in ids:
         r = dict(by_id[cid])
-        r.pop("prev", None)      # 不帶上一輪答案
-        r.pop("rule", None)      # 也不顯示規則怎麼判，避免任何錨定
+        r.pop("prev", None)  # 不帶上一輪答案
+        r.pop("rule", None)  # 也不顯示規則怎麼判，避免任何錨定
         r["rule"] = ""
         r["prev"] = ""
         rows.append(r)
@@ -64,7 +67,9 @@ def main() -> int:
     page = page.replace(
         "<p>與規則判定一致：<b>${agree} / ${DATA.length}</b>\n"
         "      （${(agree/DATA.length*100).toFixed(1)}%）—— 這不是準確率，\n"
-        "      是「人工標註和現行規則的重合度」，差距大的地方正是要改規則的地方。</p>", "")
+        "      是「人工標註和現行規則的重合度」，差距大的地方正是要改規則的地方。</p>",
+        "",
+    )
     OUT.write_text(page, encoding="utf-8")
     print(f"複核頁 {OUT.relative_to(HERE.parent.parent.parent)}（{len(rows)} 筆，無參考答案）")
     return 0
