@@ -25,18 +25,18 @@ module: e_tbd
 annotator: c85016921920-design
 
 screenshots:
-  - file: e01_jobpost_normal.png
+  - file: e01_post_normal.png
     layout: ad_post          # 版面判對率的正確答案
     variant:                 # 這張刻意帶的變化，用來看模型在什麼條件下會壞
-      width: 1080
+      width: 720
       theme: light           # light / dark
       quality: sharp         # sharp / blurred / low_res
-    is_scam: false           # 對照組也要有，不然模型會學成「只要是職缺就是詐騙」
+    is_scam: false           # 對照組也要有，不然模型會學成「只要在賣東西就是詐騙」
     blocks:
-      - text: 誠徵 行政助理
+      - text: 二手 Switch 主機出售
         role: title          # title / body / button / price / bubble / field
         speaker: null        # self / other / system；非對話類填 null
-    notes: 正常職缺，對照組
+    notes: 正常的二手轉售貼文，對照組
 ```
 
 ### 三個欄位的值域
@@ -53,8 +53,9 @@ screenshots:
 
 ### 兩個 E 自己加的欄位，提出來討論
 
-1. **`is_scam`** —— 20 張裡要有對照組（正常的職缺頁）。只餵詐騙樣本，
-   模型會學成「看到職缺就報警」，而 `can_handle()` 要保守是說明書 S4 的明確要求。
+1. **`is_scam`** —— 20 張裡要有對照組（正常的二手轉售貼文、正常的議價對話）。
+   只餵詐騙樣本，模型會學成「看到有人賣東西就報警」，
+   而 `can_handle()` 要保守是說明書 S4 的明確要求。
 2. **`variant`** —— 說明書要求截圖要有變化（不同解析度、深色淺色、故意拍糊），
    但如果不記下來是哪一種變化，之後就只知道「錯了」，不知道「在什麼條件下會錯」。
 
@@ -132,7 +133,7 @@ uv run python packages/modules/e_tbd/screenshots/_sources/render.py
    JPEG 壓縮痕跡。OCR 在這種圖上的錯字率會比真實情況樂觀，
    **CER 的數字不能直接當成上線後的預期表現**。
 2. **版型是我自己畫的，不是真的 App。** 氣泡形狀、間距、配色是仿的，
-   跟真正的 LINE 或人力銀行 App 有差距。版面判對率同樣偏樂觀。
+   跟真正的 Threads、LINE 或超商物流頁面有差距。版面判對率同樣偏樂觀。
 
 `quality: blurred` 與 `low_res` 兩種變化是為了部分補償第 1 點，
 但補不完。真要知道實際表現，得用真的手機截圖測 —— 而那必須是自己拍的，

@@ -98,7 +98,8 @@ def normalize_label(label: str) -> str:
     """標籤的規則層清理。
 
     官方標籤有 1,003 種寫法，多數是格式變體：前後多餘空白、全半形不一。
-    假求職這一組實測有 6 種寫法，其中 4 種只差在空白與換行，合計 8 筆 ——
+    本模組實際遇到的記在 pack.yaml 的 label_aliases —— 例如「假網拍詐騙」
+    有前面帶空白、開頭帶換行與定位字元兩種寫法，「網路購物詐騙」前後各有一種。
     不清理就會漏掉。
     """
     return unicodedata.normalize("NFKC", label).replace("\n", "").replace("\t", "").strip()
@@ -149,8 +150,9 @@ def build_subset(labels: list[str], platform_terms: list[str]) -> int:
 
     labels 傳 labels_canon + label_aliases 兩份合起來，內部會正規化後去重。
 
-    為什麼兩份都要傳：「假求職詐騙」與「假求職」正規化之後仍是兩個不同的字串
-    （差的不是格式而是字面），只比對 labels_canon 會漏掉後者的 446 筆。
+    為什麼兩份都要傳：label_aliases 收的是正規化之後**仍然**對不上 canon 的寫法 ——
+    承辦人打錯字（「假買家騙賣騙家詐騙」「假買家片賣家詐騙」）、全形括號
+    （「假消費異常詐騙（騙買家）」）。這些正規化修不掉，只比對 labels_canon 會漏。
     PR #24 把這種情形歸為「語意重複，要人判斷不能自動合併」—— 判斷的結果
     就記在 pack.yaml 的 label_aliases 裡，這裡照著用。
 

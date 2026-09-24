@@ -304,7 +304,7 @@ def _write(picked: list[dict]) -> int:
     print("\n第二位標註者：同一份 HTML，在另一台瀏覽器或無痕視窗標即可")
     print("（localStorage 是 gold_s10_v4_rater1，不同瀏覽器互不干擾）。")
     print("兩份結果存成 eval/gold_rater1_v4.json、gold_rater2_v4.json 後算 kappa。")
-    print("⚠ 這份含真實案例原文，要交給組員請走實體或團隊共用硬碟。")
+    print("[!] 這份含真實案例原文，要交給組員請走實體或團隊共用硬碟。")
     return 0
 
 
