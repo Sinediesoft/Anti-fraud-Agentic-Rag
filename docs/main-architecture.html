@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>防詐 Copilot 主要架構</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+:root{
+  --ground:#F4F6F5;--surface:#FFFFFF;--ink:#1C2220;--ink-2:#55605B;--ink-3:#838D88;
+  --line:#D5DCD8;--line-2:#E6EBE8;--panel:#EDF1EF;
+  --gpu-bg:#FCECE4;--gpu-line:#CF5327;--gpu-ink:#7C2A0F;
+  --cpu-bg:#E0F3EC;--cpu-line:#168C6A;--cpu-ink:#0A5440;
+  --none-bg:#ECEFED;--none-line:#B7C0BB;--none-ink:#55605B;
+  --agent:#4B44AE;--agent-bg:#F5F4FD;--agent-head:#E8E6FA;
+  --node:#1C2220;--node-ink:#FFFFFF;--link:#0E6A8C;
+  --sans:"IBM Plex Sans","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,"Noto Sans TC",monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#111513;--surface:#1A1F1D;--ink:#E6EBE8;--ink-2:#A5AFAA;--ink-3:#79837E;
+    --line:#2F3734;--line-2:#262D2A;--panel:#151A18;
+    --gpu-bg:#3B1A0D;--gpu-line:#EE8C63;--gpu-ink:#F6C6B0;
+    --cpu-bg:#0B2D24;--cpu-line:#4DC4A0;--cpu-ink:#A4E5D1;
+    --none-bg:#242A27;--none-line:#56605B;--none-ink:#A5AFAA;
+    --agent:#ABA5F2;--agent-bg:#1B1A2D;--agent-head:#292748;
+    --node:#E6EBE8;--node-ink:#111513;--link:#7CC7E8;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#111513;--surface:#1A1F1D;--ink:#E6EBE8;--ink-2:#A5AFAA;--ink-3:#79837E;
+  --line:#2F3734;--line-2:#262D2A;--panel:#151A18;
+  --gpu-bg:#3B1A0D;--gpu-line:#EE8C63;--gpu-ink:#F6C6B0;
+  --cpu-bg:#0B2D24;--cpu-line:#4DC4A0;--cpu-ink:#A4E5D1;
+  --none-bg:#242A27;--none-line:#56605B;--none-ink:#A5AFAA;
+  --agent:#ABA5F2;--agent-bg:#1B1A2D;--agent-head:#292748;
+  --node:#E6EBE8;--node-ink:#111513;--link:#7CC7E8;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font:14px/1.6 var(--sans)}
+.page{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:32px 56px}
+h1,h2,h3{text-wrap:balance}
+code{font-family:var(--mono);font-size:.92em}
+a{color:var(--link)}
+a:focus-visible,.grid-wrap:focus-visible{outline:2px solid var(--link);outline-offset:2px;border-radius:4px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.top{padding-bottom:22px;border-bottom:1px solid var(--line);margin-bottom:28px}
+.eyebrow{margin:0 0 6px;font-size:12px;letter-spacing:.08em;color:var(--ink-2)}
+h1{margin:0;font-size:30px;line-height:1.25;font-weight:600;letter-spacing:.01em}
+.lede{margin:10px 0 0;font-size:15.5px;color:var(--ink-2);max-width:48em}
+.meta{margin:8px 0 0;font-size:12.5px;color:var(--ink-3)}
+.legend{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:16px;font-size:12.5px;color:var(--ink-2)}
+.lg{display:inline-flex;align-items:center;gap:6px}
+.lg-stub{display:inline-block;width:22px;height:14px;border:1px dashed var(--ink-3);border-radius:4px}
+
+h2{margin:0 0 4px;font-size:19px;font-weight:600}
+.sec-lede{margin:0 0 16px;color:var(--ink-2);max-width:60em}
+
+.chip{display:inline-flex;align-items:center;font:500 12px/1 var(--sans);padding:4px 9px;border-radius:999px;border:1px solid;white-space:nowrap}
+.k-gpu{background:var(--gpu-bg);border-color:var(--gpu-line);color:var(--gpu-ink)}
+.k-cpu{background:var(--cpu-bg);border-color:var(--cpu-line);color:var(--cpu-ink)}
+.k-none{background:var(--none-bg);border-color:var(--none-line);color:var(--none-ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+
+.summary{margin-bottom:36px}
+.summary-grid{display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:24px;align-items:start}
+.mm-fig{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.mm{display:block;width:100%;height:auto;max-width:100%}
+.mm figcaption,.mm-fig figcaption{margin-top:10px;font-size:12.5px;color:var(--ink-2)}
+.mm-proc{stroke-width:1.2}
+.mm-cpu{fill:var(--cpu-bg);stroke:var(--cpu-line)}
+.mm-gpu{fill:var(--gpu-bg);stroke:var(--gpu-line)}
+.mm-item{fill:var(--surface);stroke:var(--line);stroke-width:1}
+.mm-dash{stroke-dasharray:4 3}
+.mm-badge{stroke-width:1}
+.mm-cpu-b{fill:var(--surface);stroke:var(--cpu-line)}
+.mm-gpu-b{fill:var(--surface);stroke:var(--gpu-line)}
+.mm-badge-t{font:600 11.5px var(--sans);dominant-baseline:central}
+.mm-cpu-t{fill:var(--cpu-ink)}
+.mm-gpu-t{fill:var(--gpu-ink)}
+.mm-title{font:600 14px var(--sans);fill:var(--ink);dominant-baseline:central}
+.mm-name{font:600 12.5px var(--sans);fill:var(--ink);dominant-baseline:central}
+.mm-sub{font:12px var(--sans);fill:var(--ink-2);dominant-baseline:central}
+.mm-code{font:12px var(--mono);fill:var(--ink);dominant-baseline:central}
+.mm-arrow{stroke:var(--ink-2);stroke-width:1.6}
+.mm-head{fill:none;stroke:var(--ink-2);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.models{width:100%;min-width:34rem;border-collapse:collapse;table-layout:fixed;font-size:13px}
+.models th,.models td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line-2)}
+.models thead th{font-size:12px;font-weight:600;color:var(--ink-2);background:var(--panel)}
+.models tbody tr:last-child th,.models tbody tr:last-child td{border-bottom:0}
+.m-name{display:block;font-weight:600;font-family:var(--mono);font-size:13px}
+.m-sub{display:block;font-weight:400;font-size:12px;color:var(--ink-3)}
+.proof{color:var(--ink-2);overflow-wrap:anywhere}
+.stack{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.models .chip{white-space:normal;line-height:1.3}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px 16px}
+.step-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin-bottom:10px}
+.node{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--node);color:var(--node-ink);font:600 12.5px/1 var(--sans);flex:none}
+.step-head h3{margin:0;font-size:15.5px;font-weight:600}
+.tag{font-size:12px;color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:1px 9px}
+.rows{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
+.row{display:contents}
+.act{margin:0;padding:6px 14px 6px 34px;position:relative;color:var(--ink-2)}
+.act::before{content:"";position:absolute;left:20px;top:15px;width:5px;height:5px;border-radius:50%;background:var(--ink-3)}
+.refs{list-style:none;margin:0;padding:6px 12px;background:var(--panel);font-size:12.5px;line-height:1.55}
+.refs li+li{margin-top:2px}
+.row:first-child .refs{border-top-left-radius:8px;border-top-right-radius:8px}
+.row:last-child .refs{border-bottom-left-radius:8px;border-bottom-right-radius:8px}
+.refs a{text-decoration:none}
+.refs a:hover code{text-decoration:underline}
+.refs a code{color:var(--link)}
+.fn{color:var(--ink)}
+.rnote{color:var(--ink-3);font-size:12px}
+.who{display:inline-block;min-width:1.5em;font-weight:600;color:var(--ink-2)}
+.card>.chips{margin-left:34px}
+
+.edge{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;min-height:40px;padding:8px 0 8px 52px;color:var(--ink-2);font-size:13px}
+.edge::before{content:"";position:absolute;left:28px;top:0;bottom:9px;border-left:1.5px solid var(--ink-3)}
+.edge::after{content:"";position:absolute;left:23.5px;bottom:2px;border:5.25px solid transparent;border-top:7px solid var(--ink-3);border-bottom:0}
+.loop{font-size:12.5px;color:var(--ink-2);border:1px dashed var(--ink-3);border-radius:999px;padding:1px 10px}
+
+.tiles{display:grid;grid-template-columns:1.5fr .7fr 1.1fr .7fr 1.1fr;gap:10px;margin-top:12px}
+.tile{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--surface);min-width:0}
+.tile.is-stub{border-style:dashed;background:transparent;color:var(--ink-3)}
+.tile-head{font-weight:600;font-size:13.5px}
+.tile-head b{margin-right:4px}
+.tile-sub{font-size:12px;color:var(--ink-2)}
+.tile p{margin:6px 0 0;font-size:13px}
+.tile .faint{color:var(--ink-3);font-size:12.5px}
+.tile .chips{margin-top:8px}
+.tile-refs{background:none;padding:8px 0 0;margin-top:10px;border-top:1px dashed var(--line);font-size:12px;border-radius:0}
+
+.branches{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 0 34px}
+.branches-label{grid-column:1 / -1;margin:0;font-size:12.5px;color:var(--ink-2)}
+.branch{border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--panel)}
+.branch b{display:block;font-size:13.5px}
+.branch span{font-size:13px;color:var(--ink-2)}
+
+.card.agent{background:var(--agent-bg);border-color:var(--agent)}
+.agent-title{color:var(--agent)}
+.grid-wrap{overflow-x:auto;margin-top:12px;padding-bottom:4px}
+.agrid{display:grid;grid-template-columns:7rem repeat(3,minmax(11rem,1fr));gap:6px 8px;min-width:46rem}
+.gh{background:var(--agent-head);color:var(--agent);font-weight:600;font-size:13px;padding:6px 10px;border-radius:6px}
+.gl{padding:6px 4px;font-size:12.5px;color:var(--ink-2)}
+.gl b{display:block;font-size:13.5px;color:var(--ink)}
+.gl span{display:block}
+.cell{background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:13px;min-width:0}
+.cell p{margin:0}
+.cell .chips{margin-top:8px}
+.cell .small{margin-top:6px;color:var(--ink-3);font-size:12px}
+.cell.is-stub{border-style:dashed;background:transparent;color:var(--ink-3)}
+.cell.is-skip{border:1px dotted var(--line);background:transparent;color:var(--ink-3)}
+.grid-refs{display:flex;flex-wrap:wrap;gap:2px 18px;background:none;padding:0 2px 10px;margin-bottom:4px;border-bottom:1px solid var(--line);font-size:12px;border-radius:0}
+.grid-refs li+li{margin-top:0}
+
+.details{margin-top:40px;padding-top:24px;border-top:1px solid var(--line)}
+.details h2+.facts{margin-top:8px}
+.facts{margin:8px 0 26px;padding-left:1.2em;color:var(--ink-2);max-width:62em}
+.facts li+li{margin-top:6px}
+
+@media (max-width:900px){
+  .summary-grid{grid-template-columns:1fr}
+  .mm-fig{max-width:480px}
+  .tiles{grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))}
+}
+@media (max-width:720px){
+  h1{font-size:25px}
+  .rows{grid-template-columns:1fr}
+  .act{padding-bottom:2px}
+  .refs{margin:0 0 6px 34px;border-radius:8px}
+  .row:first-child .refs,.row:last-child .refs{border-radius:8px}
+  .rows .refs.is-empty{display:none}
+  .card>.chips,.branches{margin-left:0}
+  .branches{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="page" lang="zh-Hant"><header class="top"><p class="eyebrow">專題主要架構・2026-09-24 定案</p><h1>防詐 Copilot 主要架構</h1><p class="lede">從使用者輸入、A～E 模組到 M5 Agent，每一步呼叫的模型、跑在 CPU 或 GPU、載入記憶體還是顯卡記憶體，以及對應的程式碼。</p><p class="meta">現況：a-rag 分支 <code>2c2662f</code> ・ 2026-09-24 在 A 的 Mac（M5）實跑確認 ・ 其他流程圖已列為廢案</p><div class="legend"><span class="lg"><span class="chip k-gpu">GPU</span><span class="chip k-gpu">顯卡記憶體</span><span>小模型 qwen2.5:3b（在 Ollama 裡跑）</span></span><span class="lg"><span class="chip k-cpu">CPU</span><span class="chip k-cpu">記憶體</span><span>嵌入 bge-m3、OCR PP-OCRv6 small</span></span><span class="lg"><span class="chip k-none">無模型（規則）</span><span>詞表、規則比對</span></span><span class="lg"><span class="lg-stub" aria-hidden="true"></span><span>尚未建立／空殼</span></span></div></header><section class="summary" aria-labelledby="sum-title"><h2 id="sum-title">整條流程只用到三個模型</h2><p class="sec-lede">其餘步驟都是規則或詞表比對，沒有模型、全在 CPU。</p><div class="summary-grid"><figure class="mm-fig">
+<svg class="mm" viewBox="0 0 460 392" role="img" aria-label="bge-m3 與 OCR 跟介面在同一個 Python 行程裡，放在系統記憶體、用 CPU 算；只有 qwen2.5:3b 在 Ollama 的行程裡，放在顯卡記憶體、用 GPU 算。兩邊只靠一條本機 HTTP 連線溝通。Mac 沒有獨立的顯卡記憶體，GPU 用的是統一記憶體。">
+  <defs><marker id="mm-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mm-head" d="M2 1L8 5L2 9"/></marker></defs>
+  <rect class="mm-proc mm-cpu" x="6" y="6" width="448" height="210" rx="12"/>
+  <text class="mm-title" x="24" y="34">Streamlit 的 Python 行程</text>
+  <rect class="mm-badge mm-cpu-b" x="330" y="21" width="108" height="24" rx="12"/>
+  <text class="mm-badge-t mm-cpu-t" x="384" y="33" text-anchor="middle">CPU・記憶體</text>
+  <rect class="mm-item" x="22" y="54" width="416" height="44" rx="8"/>
+  <text class="mm-name" x="36" y="71">bge-m3（fp32）</text>
+  <text class="mm-sub" x="36" y="88">約 2.2 GB　開機時背景載入，一直留著</text>
+  <rect class="mm-item" x="22" y="106" width="416" height="44" rx="8"/>
+  <text class="mm-name" x="36" y="123">OCR：PP-OCRv6 small</text>
+  <text class="mm-sub" x="36" y="140">第一張截圖才載入；跑久了約 1.5 GB</text>
+  <rect class="mm-item mm-dash" x="22" y="158" width="416" height="44" rx="8"/>
+  <text class="mm-name" x="36" y="175">索引＋語料（A 73 MB、C 64 MB）</text>
+  <text class="mm-sub" x="36" y="192">每次查詢從磁碟讀進來，用完就放掉</text>
+  <line class="mm-arrow" x1="230" y1="218" x2="230" y2="272" marker-end="url(#mm-arrow)"/>
+  <text class="mm-sub" x="244" y="240">call_slm() 經 HTTP</text>
+  <text class="mm-code" x="244" y="257">127.0.0.1:11434</text>
+  <text class="mm-sub" x="216" y="248" text-anchor="end">C 的生成、E 的空呼叫</text>
+  <rect class="mm-proc mm-gpu" x="6" y="280" width="448" height="104" rx="12"/>
+  <text class="mm-title" x="24" y="308">Ollama 行程</text>
+  <rect class="mm-badge mm-gpu-b" x="316" y="295" width="122" height="24" rx="12"/>
+  <text class="mm-badge-t mm-gpu-t" x="377" y="307" text-anchor="middle">GPU・顯卡記憶體</text>
+  <rect class="mm-item" x="22" y="326" width="416" height="44" rx="8"/>
+  <text class="mm-name" x="36" y="343">qwen2.5:3b（Q4_K_M）</text>
+  <text class="mm-sub" x="36" y="360">約 2.4 GB　第一次呼叫才載入，閒置 5 分鐘卸載</text>
+</svg>
+<figcaption>bge-m3 與 OCR 跟介面在同一個 Python 行程裡，放在系統記憶體、用 CPU 算；只有 qwen2.5:3b 在 Ollama 的行程裡，放在顯卡記憶體、用 GPU 算。兩邊只靠一條本機 HTTP 連線溝通。Mac 沒有獨立的顯卡記憶體，GPU 用的是統一記憶體。</figcaption></figure><div><div class="table-wrap"><table class="models"><colgroup><col style="width:23%"><col style="width:31%"><col style="width:26%"><col style="width:20%"></colgroup><thead><tr><th scope="col">模型</th><th scope="col">在哪一步</th><th scope="col">運算・放在哪</th><th scope="col">實測</th></tr></thead><tbody><tr><th scope="row"><span class="m-name">bge-m3</span><span class="m-sub">568M 參數・fp32</span></th><td>開機時預熱（步驟 0）；A、C 的檢索（步驟 5）</td><td><div class="stack"><span class="chip k-cpu">CPU（寫死）</span><span class="chip k-cpu">記憶體・約 2.2 GB</span></div></td><td class="proof">參數在 cpu、float32</td></tr><tr><th scope="row"><span class="m-name">PP-OCRv6 small</span><span class="m-sub">RapidOCR 3.9.2 內建的 ONNX 檔</span></th><td>A 路由打分時讀截圖（步驟 3）；A 的 m2 讀快取（步驟 5）</td><td><div class="stack"><span class="chip k-cpu">CPU（onnxruntime）</span><span class="chip k-cpu">記憶體・跑久了約 1.5 GB</span></div></td><td class="proof">三個 session 都只開 CPUExecutionProvider</td></tr><tr><th scope="row"><span class="m-name">qwen2.5:3b</span><span class="m-sub">Q4_K_M・digest 357c53fb659c</span></th><td>C 的生成、E 的 m4 空呼叫（步驟 5）</td><td><div class="stack"><span class="chip k-gpu">GPU（Metal／CUDA）</span><span class="chip k-gpu">顯卡記憶體・約 2.4 GB</span></div></td><td class="proof">ollama ps：100% GPU</td></tr></tbody></table></div></div></div></section><section class="flow" aria-labelledby="flow-title"><h2 id="flow-title">產品流程</h2><p class="sec-lede">由上往下是執行順序。每張卡片左邊是動作、右邊是對應的程式碼（點檔名會開 GitHub 的 a-rag 分支）；卡片底下的標籤是這一步呼叫的模型、跑在哪、放在哪。</p><section class="step" id="step-0"><div class="card"><header class="step-head"><span class="node" aria-hidden="true">0</span><h3 class=""><span class="vh">步驟 0：</span>開機：載入外殼、模組與嵌入模型</h3><span class="tag">每個行程一次</span></header><div class="rows"><div class="row"><p class="act">畫出介面：Streamlit，兩個分頁（對話／單次查詢）</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/ui.py" target="_blank" rel="noopener"><code>app/ui.py</code></a> <code class="fn">main()</code></li></ul></div><div class="row"><p class="act">建外殼：註冊表＋解鎖層；畫面每次重跑都會重建</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/shell.py" target="_blank" rel="noopener"><code>app/shell.py</code></a> <code class="fn">Shell.boot()</code></li></ul></div><div class="row"><p class="act">掃模組：A、C、E 載入；B、D 沒有 pack.yaml，掃不到</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/registry.py" target="_blank" rel="noopener"><code>app/registry.py</code></a> <code class="fn">load()、discover()</code></li></ul></div><div class="row"><p class="act">各模組回報健康狀態（會讀自己的語料檔）</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/tree/a-rag/modules" target="_blank" rel="noopener"><code>modules/*/module.py</code></a> <code class="fn">build_module()、health()</code></li></ul></div><div class="row"><p class="act">背景執行緒預熱 bge-m3，使用者打字時就載完</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/ui.py" target="_blank" rel="noopener"><code>app/ui.py</code></a> <code class="fn">_warm_up_embedder()</code></li></ul></div><div class="row"><p class="act">載入權重：寫死 CPU、fp32；整個行程只載一次</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/shared/models.py" target="_blank" rel="noopener"><code>shared/models.py</code></a> <code class="fn">embed()、_load_embedder()</code></li></ul></div></div><div class="chips"><span class="chip k-cpu">bge-m3　568M 參數・fp32</span><span class="chip k-cpu">CPU</span><span class="chip k-cpu">記憶體 約 2.2 GB</span></div></div></section><div class="edge"><span class="edge-label">開機完成，等使用者開口</span></div><section class="step" id="step-1"><div class="card"><header class="step-head"><span class="node" aria-hidden="true">1</span><h3 class=""><span class="vh">步驟 1：</span>使用者輸入：打字，可以附截圖</h3></header><div class="rows"><div class="row"><p class="act">送出這一句；上傳框裡的截圖跟著一起交出</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/ui.py" target="_blank" rel="noopener"><code>app/ui.py</code></a> <code class="fn">_chat_tab()、_uploads_to_images()</code></li></ul></div><div class="row"><p class="act">截圖存到本機暫存目錄，檔名用內容雜湊（同一張只存一份）</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/uploads.py" target="_blank" rel="noopener"><code>app/uploads.py</code></a> <code class="fn">save_upload()</code></li></ul></div><div class="row"><p class="act">同一張圖只加一次；這一句併進對話紀錄</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/chat.py" target="_blank" rel="noopener"><code>app/chat.py</code></a> <code class="fn">ChatSession.add_images()、send()</code></li></ul></div></div><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span><span class="chip k-none">記憶體</span></div></div></section><div class="edge"><span class="loop">↻ 還沒問滿三題就回到 ①</span></div><section class="step" id="step-2"><div class="card"><header class="step-head"><span class="node" aria-hidden="true">2</span><h3 class=""><span class="vh">步驟 2：</span>對話層：追問三輪</h3></header><div class="rows"><div class="row"><p class="act">每一輪先跑一次 ③ 的路由，只為了畫「分數怎麼變」那張圖</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/chat.py" target="_blank" rel="noopener"><code>app/chat.py</code></a> <code class="fn">_advance()、_scores()</code></li></ul></div><div class="row"><p class="act">偵測到受災訊號，先給停損三條與 165（不等追問完）</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/chat.py" target="_blank" rel="noopener"><code>app/chat.py</code></a> <code class="fn">_distress_advice()</code></li></ul></div><div class="row"><p class="act">挑還沒講過的格子問；追問用的詞彙讀各模組的 pack.yaml</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/chat.py" target="_blank" rel="noopener"><code>app/chat.py</code></a> <code class="fn">_filled()、_next_question()</code></li></ul></div></div><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span><span class="chip k-none">記憶體</span></div></div></section><div class="edge"><span class="edge-label">問滿三題，或按「直接看結果」→ shell.analyze()</span></div><section class="step" id="step-3"><div class="card"><header class="step-head"><span class="node" aria-hidden="true">3</span><h3 class=""><span class="vh">步驟 3：</span>路由：A～E 每個模組自己打分 can_handle()</h3></header><div class="rows"><div class="row"><p class="act">問每個載入的模組；分數過自己的 route_min 才算認領</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/router.py" target="_blank" rel="noopener"><code>app/router.py</code></a> <code class="fn">route()、_ask()</code></li></ul></div></div><div class="tiles"><div class="tile"><div class="tile-head"><b>A</b> LINE</div><div class="tile-sub">假投資・免費</div><p>有截圖先用 OCR 讀出字</p><div class="chips"><span class="chip k-cpu">PP-OCRv6 small</span><span class="chip k-cpu">CPU</span><span class="chip k-cpu">記憶體</span></div><p class="faint">第一張圖進來才載入引擎，結果依圖檔雜湊快取；再算關鍵字分數 × 平台係數</p><ul class="refs tile-refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/a_tbd/module.py" target="_blank" rel="noopener"><code>modules/a_tbd/module.py</code></a> <code class="fn">can_handle()</code></li><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/a_tbd/m2_vision.py" target="_blank" rel="noopener"><code>modules/a_tbd/m2_vision.py</code></a> <code class="fn">read_all()</code></li><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/a_tbd/m4_judgement.py" target="_blank" rel="noopener"><code>modules/a_tbd/m4_judgement.py</code></a> <code class="fn">keyword_score()</code></li></ul></div><div class="tile is-stub"><div class="tile-head"><b>B</b></div><p>尚未建立，題目還沒宣告</p><ul class="refs tile-refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/b_tbd/README.md" target="_blank" rel="noopener"><code>modules/b_tbd/README.md</code></a> <span class="rnote">只有這個檔</span></li></ul></div><div class="tile"><div class="tile-head"><b>C</b> Facebook</div><div class="tile-sub">投資詐騙・付費</div><p>關鍵字＋平台加分</p><p>截圖不處理（空殼）</p><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span></div><ul class="refs tile-refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/c_tbd/module.py" target="_blank" rel="noopener"><code>modules/c_tbd/module.py</code></a> <code class="fn">can_handle()</code></li><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/c_tbd/m2_vision.py" target="_blank" rel="noopener"><code>modules/c_tbd/m2_vision.py</code></a> <code class="fn">read_screenshot()</code> <span class="rnote">空殼</span></li></ul></div><div class="tile is-stub"><div class="tile-head"><b>D</b></div><p>尚未建立，只有題目 README</p><ul class="refs tile-refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/d_tbd/README.md" target="_blank" rel="noopener"><code>modules/d_tbd/README.md</code></a> <span class="rnote">只有這個檔</span></li></ul></div><div class="tile"><div class="tile-head"><b>E</b> Threads</div><div class="tile-sub">網購詐騙・付費</div><p>關鍵字＋決定性詞＋平台加分</p><p>截圖不處理（空殼）</p><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span></div><ul class="refs tile-refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/e_tbd/module.py" target="_blank" rel="noopener"><code>modules/e_tbd/module.py</code></a> <code class="fn">can_handle()</code></li><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/e_tbd/m2_vision.py" target="_blank" rel="noopener"><code>modules/e_tbd/m2_vision.py</code></a> <code class="fn">read_screenshot()</code> <span class="rnote">空殼</span></li></ul></div></div></div></section><div class="edge"><span class="edge-label">收齊 A、C、E 的分數</span></div><section class="step" id="step-4"><div class="card"><header class="step-head"><span class="node" aria-hidden="true">4</span><h3 class=""><span class="vh">步驟 4：</span>選模組：只交給分數最高的一個</h3></header><div class="rows"><div class="row"><p class="act">分數最高的出完整判讀；打平時看 priority</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/router.py" target="_blank" rel="noopener"><code>app/router.py</code></a> <code class="fn">route()</code></li></ul></div><div class="row"><p class="act">其他過門檻或接近門檻的，只出「你可能同時也遇到」</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/shell.py" target="_blank" rel="noopener"><code>app/shell.py</code></a> <code class="fn">Shell.analyze()</code></li></ul></div><div class="row"><p class="act">選中的模組先過解鎖檢查（A 免費，C、E 付費）</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/entitlements.py" target="_blank" rel="noopener"><code>app/entitlements.py</code></a> <code class="fn">can_use()</code></li></ul></div><div class="row"><p class="act">沒有模組過門檻 → 分支「尚未涵蓋」</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/shell.py" target="_blank" rel="noopener"><code>app/shell.py</code></a> <code class="fn">GENERAL_ADVICE</code></li></ul></div><div class="row"><p class="act">選中的模組未解鎖 → 分支「未解鎖」</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/entitlements.py" target="_blank" rel="noopener"><code>app/entitlements.py</code></a> <code class="fn">locked_notice()</code></li></ul></div></div><div class="branches"><p class="branches-label">兩條分支，不走 ⑤</p><div class="branch"><b>尚未涵蓋</b><span>只給通用建議＋165 → ⑥</span></div><div class="branch"><b>未解鎖</b><span>只說類型，風險與 165 照給 → ⑥</span></div></div><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span><span class="chip k-none">記憶體</span></div></div></section><div class="edge"><span class="edge-label">有模組認領、而且已解鎖</span></div><section class="step" id="step-5"><div class="card agent"><header class="step-head"><span class="node" aria-hidden="true">5</span><h3 class="agent-title"><span class="vh">步驟 5：</span>M5 Agent：被選中的模組跑自己的流水線</h3></header><div class="rows"><div class="row"><p class="act">analyze() → m5_agent.run()：由上而下依序執行；一步壞掉只降級，不中斷</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/tree/a-rag/modules" target="_blank" rel="noopener"><code>modules/*/module.py</code></a> <code class="fn">analyze()</code></li><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/tree/a-rag/modules" target="_blank" rel="noopener"><code>modules/*/m5_agent.py</code></a> <code class="fn">run()、_step()</code></li></ul></div><div class="row"><p class="act">B、D 還沒有模組，不會走到這一段</p><div class="refs is-empty"></div></div></div><div class="grid-wrap" role="region" aria-label="M5 Agent 的各個步驟，A、C、E 三個模組對照（可左右捲動）" tabindex="0"><div class="agrid"><div class="gh">步驟</div><div class="gh">A　LINE 假投資</div><div class="gh">C　Facebook 投資</div><div class="gh">E　Threads 網購</div><div class="gl" style="grid-row:2 / span 2"><b>m2</b><span>截圖理解</span></div><div class="cell" style="grid-row:2;grid-column:2 / span 1"><p>路由時辨識過就直接讀快取</p><div class="chips"><span class="chip k-cpu">PP-OCRv6 small</span><span class="chip k-cpu">CPU</span><span class="chip k-cpu">記憶體</span></div></div><div class="cell is-stub" style="grid-row:2;grid-column:3 / span 1"><p>空殼：截圖不處理</p></div><div class="cell is-stub" style="grid-row:2;grid-column:4 / span 1"><p>空殼：截圖不處理</p></div><ul class="refs grid-refs" style="grid-row:3;grid-column:2 / -1"><li><span class="who">A</span><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/a_tbd/m2_vision.py" target="_blank" rel="noopener"><code>modules/a_tbd/m2_vision.py</code></a> <code class="fn">read_all()</code></li><li><span class="who">C</span><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/c_tbd/m2_vision.py" target="_blank" rel="noopener"><code>modules/c_tbd/m2_vision.py</code></a> <span class="rnote">空殼</span></li><li><span class="who">E</span><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/e_tbd/m2_vision.py" target="_blank" rel="noopener"><code>modules/e_tbd/m2_vision.py</code></a> <span class="rnote">空殼</span></li></ul><div class="gl" style="grid-row:4 / span 2"><b>合併輸入</b></div><div class="cell" style="grid-row:4;grid-column:2 / span 3"><p>打字＋截圖上的文字接成一段</p><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span><span class="chip k-none">記憶體</span></div></div><ul class="refs grid-refs" style="grid-row:5;grid-column:2 / -1"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/tree/a-rag/modules" target="_blank" rel="noopener"><code>modules/*/m5_agent.py</code></a> <code class="fn">combine()</code> <span class="rnote">run() 裡的內部函式</span></li></ul><div class="gl" style="grid-row:6 / span 2"><b>去識別化</b><span>shared.deid</span></div><div class="cell" style="grid-row:6;grid-column:2 / span 3"><p>規則比對遮個資（NER 還沒接）</p><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span><span class="chip k-none">記憶體</span></div></div><ul class="refs grid-refs" style="grid-row:7;grid-column:2 / -1"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/shared/deid.py" target="_blank" rel="noopener"><code>shared/deid.py</code></a> <code class="fn">mask()</code> <span class="rnote">m5_agent.py 的 apply_deid() 呼叫它</span></li></ul><div class="gl" style="grid-row:8 / span 2"><b>m4</b><span>分類與階段</span></div><div class="cell" style="grid-row:8;grid-column:2 / span 2"><p>線索詞規則判階段；小模型的 prompt 還沒寫，不呼叫</p><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span><span class="chip k-none">記憶體</span></div></div><div class="cell" style="grid-row:8;grid-column:4 / span 1"><p>先送空 prompt 給小模型、回答丟掉不用，再走 12 階段規則</p><div class="chips"><span class="chip k-gpu">qwen2.5:3b</span><span class="chip k-gpu">GPU</span><span class="chip k-gpu">顯卡記憶體</span></div></div><ul class="refs grid-refs" style="grid-row:9;grid-column:2 / -1"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/tree/a-rag/modules" target="_blank" rel="noopener"><code>modules/*/m4_judgement.py</code></a> <code class="fn">judge()</code></li><li><span class="who">E</span><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/e_tbd/threads_stages.py" target="_blank" rel="noopener"><code>modules/e_tbd/threads_stages.py</code></a> <code class="fn">assess()</code></li><li><span class="who">E</span><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/shared/models.py" target="_blank" rel="noopener"><code>shared/models.py</code></a> <code class="fn">call_slm(&quot;&quot;)</code> <span class="rnote">空 prompt</span></li></ul><div class="gl" style="grid-row:10 / span 2"><b>m3</b><span>檢索相似案例</span></div><div class="cell" style="grid-row:10;grid-column:2 / span 1"><p>先過關鍵字門檻，bge-m3 編碼問句，和 17,764 筆向量算內積＋手法詞加分，取前 5 筆</p><div class="chips"><span class="chip k-cpu">bge-m3</span><span class="chip k-cpu">CPU</span><span class="chip k-cpu">記憶體</span></div><p class="small">索引 73 MB，每次查詢從磁碟讀進記憶體</p></div><div class="cell" style="grid-row:10;grid-column:3 / span 1"><p>bge-m3 編碼問句，和 10,051 筆向量算內積，門檻 0.60，取前 5 筆</p><div class="chips"><span class="chip k-cpu">bge-m3</span><span class="chip k-cpu">CPU</span><span class="chip k-cpu">記憶體</span></div><p class="small">索引 64 MB，每次讀進記憶體，也整份寫回磁碟</p></div><div class="cell" style="grid-row:10;grid-column:4 / span 1"><p>字元 2-gram 重疊比對，沒有向量</p><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span><span class="chip k-none">記憶體</span></div></div><ul class="refs grid-refs" style="grid-row:11;grid-column:2 / -1"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/tree/a-rag/modules" target="_blank" rel="noopener"><code>modules/*/m3_retrieval.py</code></a> <code class="fn">search()</code></li><li><span class="who">A</span><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/a_tbd/m3_retrieval.py" target="_blank" rel="noopener"><code>modules/a_tbd/m3_retrieval.py</code></a> <code class="fn">_gate_keyword()、_vector_scores()</code></li><li><span class="who">C</span><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/c_tbd/m3_retrieval.py" target="_blank" rel="noopener"><code>modules/c_tbd/m3_retrieval.py</code></a> <code class="fn">Retriever.retrieve()、NumpyStore</code></li><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/shared/models.py" target="_blank" rel="noopener"><code>shared/models.py</code></a> <code class="fn">embed()</code> <span class="rnote">問句向量</span></li></ul><div class="gl" style="grid-row:12 / span 2"><b>生成</b><span>白話說明（G）</span></div><div class="cell is-skip" style="grid-row:12;grid-column:2 / span 1"><p>（沒有這一步）</p></div><div class="cell" style="grid-row:12;grid-column:3 / span 1"><p>qwen2.5:3b 讀遮蔽文字＋前 3 筆案例寫說明</p><div class="chips"><span class="chip k-gpu">qwen2.5:3b Q4_K_M</span><span class="chip k-gpu">GPU</span><span class="chip k-gpu">顯卡記憶體</span></div><p class="small">失敗或超過 400 字，退回劇本的固定說明</p></div><div class="cell is-skip" style="grid-row:12;grid-column:4 / span 1"><p>（沒有這一步）</p></div><ul class="refs grid-refs" style="grid-row:13;grid-column:2 / -1"><li><span class="who">C</span><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/modules/c_tbd/generation.py" target="_blank" rel="noopener"><code>modules/c_tbd/generation.py</code></a> <code class="fn">explain()、build_prompt()</code></li><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/packages/shared/models.py" target="_blank" rel="noopener"><code>shared/models.py</code></a> <code class="fn">call_slm()</code> <span class="rnote">HTTP 送到 Ollama（127.0.0.1:11434）</span></li></ul><div class="gl" style="grid-row:14 / span 2"><b>合成判讀</b></div><div class="cell" style="grid-row:14;grid-column:2 / span 3"><p>playbook.yaml 的階段 → 風險等級與行動清單，附相似案例與法條</p><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span><span class="chip k-none">記憶體</span></div></div><ul class="refs grid-refs" style="grid-row:15;grid-column:2 / -1"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/tree/a-rag/modules" target="_blank" rel="noopener"><code>modules/*/m5_agent.py</code></a> <code class="fn">_compose()</code></li><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/tree/a-rag/modules" target="_blank" rel="noopener"><code>modules/*/playbook.yaml</code></a> <span class="rnote">階段與行動清單</span></li><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/tree/a-rag/modules" target="_blank" rel="noopener"><code>modules/*/pack.yaml</code></a> <span class="rnote">knowledge_refs（法條）</span></li></ul></div></div></div></section><div class="edge"><span class="edge-label">Verdict（判讀結果）</span></div><section class="step" id="step-6"><div class="card"><header class="step-head"><span class="node" aria-hidden="true">6</span><h3 class=""><span class="vh">步驟 6：</span>輸出檢核與呈現</h3></header><div class="rows"><div class="row"><p class="act">高風險卻沒行動 → 改走通用建議；案例沒編號丟掉；免責聲明補回</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/guards.py" target="_blank" rel="noopener"><code>app/guards.py</code></a> <code class="fn">enforce()、check()</code></li></ul></div><div class="row"><p class="act">組成回應：判讀＋其他模組的提醒＋風險與 165</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/shell.py" target="_blank" rel="noopener"><code>app/shell.py</code></a> <code class="fn">Shell.analyze()</code></li></ul></div><div class="row"><p class="act">攤成對話訊息：純樣板，不生成新內容</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/chat.py" target="_blank" rel="noopener"><code>app/chat.py</code></a> <code class="fn">_render()</code></li></ul></div><div class="row"><p class="act">判讀之後的追問，只回答白名單裡的欄位</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/chat.py" target="_blank" rel="noopener"><code>app/chat.py</code></a> <code class="fn">_follow_up()</code></li></ul></div><div class="row"><p class="act">右側畫執行紀錄與「每問一題，分數怎麼變」</p><ul class="refs"><li><a href="https://github.com/Sinediesoft/Anti-fraud-Agentic-Rag/blob/a-rag/app/ui.py" target="_blank" rel="noopener"><code>app/ui.py</code></a> <code class="fn">_render_trace()、_chat_tab()</code></li></ul></div></div><div class="chips"><span class="chip k-none">無模型（規則）</span><span class="chip k-none">CPU</span><span class="chip k-none">記憶體</span></div></div></section></section><section class="details" aria-labelledby="det-title"><h2 id="det-title">裝置與記憶體的細節</h2><ul class="facts"><li>GPU（C 的生成、E 的空呼叫）：qwen2.5:3b Q4_K_M 跑在 Ollama 自己的行程，不在 Python 裡；第一次呼叫才載入，閒置 5 分鐘自動卸載。A 的 Mac（M5）是 Metal＋統一記憶體，ollama ps 顯示 2.4 GB、100% GPU。B、C 的 GTX 1650 是 CUDA＋4 GB 顯卡記憶體，實測約 2.3 GB、100% GPU。D 的筆電沒有獨顯，Ollama 改裝在教室電腦（1050 Ti，4 GB，還沒實測）；沒有 GPU 的機器，Ollama 會退回 CPU 跑。E 的 5070 Ti 有 16 GB，但全隊用同一個 3B 模型；num_ctx 一律鎖 8192。</li><li>CPU（bge-m3、OCR）：五台都一樣。bge-m3 寫死 cpu＋fp32，分數才能互比（實測參數在 cpu、float32）；OCR 的 onnxruntime 實測只開 CPUExecutionProvider。兩者都在 Streamlit 的 Python 行程裡，載一次共用：bge-m3 約 2.2 GB；OCR 模型檔約 32 MB，跑圖時行程記憶體會長到約 1.5 GB。</li><li>不在查詢路徑上：重排序 bge-reranker-v2-m3（rerank() 還沒實作，決議只用在評估）；雲端模型（沒有任何地方呼叫 call_cloud()）。</li></ul><h2 id="src-title">這張圖怎麼來的</h2><ul class="facts"><li>2026-09-24 在 A 的 Mac（M5）實跑三次：對話分頁交給 C、單次查詢附截圖、單次查詢交給 E。步驟順序出自執行紀錄；跑在哪裡出自 <code>ollama ps</code>、onnxruntime 的 providers、bge-m3 參數的 device。</li><li>GitHub 上看的圖是 <code>docs/img/main-architecture.svg</code>，這一頁是 <code>docs/main-architecture.html</code>，兩個都由 <code>tools/gen_main_architecture.py</code> 從同一份內容產生；程式改了就改產生器裡的內容再重跑。</li><li>其他流程圖已於 2026-09-24 列為廢案，原封不動保存在 <code>docs/廢案/</code>。</li></ul></section></div>
+</body>
+</html>

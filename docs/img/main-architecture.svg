@@ -1,0 +1,465 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1140" height="2550" viewBox="0 0 1140 2550" role="img">
+<title>防詐 Copilot 主要架構：每一步呼叫的模型、跑在 CPU 或 GPU、載入哪一種記憶體（2026-09-24）</title>
+<desc>專題主要架構。從開機、使用者輸入、對話層追問、A 到 E 五個模組的路由打分、選出一個模組、該模組的 M5 Agent 流水線（截圖理解、合併、去識別化、分類、檢索、生成、合成），到輸出檢核與呈現。每一步標出呼叫的模型、跑在 CPU 或 GPU、放在記憶體或顯卡記憶體；右側列出每個動作對應的程式碼檔案與函式。由 tools/gen_main_architecture.py 產生。</desc>
+<style>
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+.bg{fill:#FFFFFF}
+.title{font-size:17px;font-weight:600;fill:#2C2C2A}
+.th{font-size:14px;font-weight:500;fill:#2C2C2A}
+.th2{font-size:13px;font-weight:500;fill:#2C2C2A}
+.ts{font-size:12px;fill:#5F5E5A}
+.tsm{font-size:11px;fill:#5F5E5A}
+.tc{font-size:11.5px;fill:#2C2C2A}
+.tf{font-size:11px;fill:#888780}
+.ch{font-size:12.5px;font-weight:600;fill:#2C2C2A}
+.gh{font-size:12px;font-weight:600;fill:#3C3489}
+.gl{font-size:12.5px;font-weight:600;fill:#2C2C2A}
+.nh{font-size:12.5px;font-weight:600;fill:#2C2C2A}
+.code,.code2{font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:11px}
+.code{fill:#2C2C2A}
+.code2{fill:#5F5E5A}
+.box{fill:#FFFFFF;stroke:#B4B2A9;stroke-width:0.8}
+.box.alt{fill:#FBFAF7}
+.dash{stroke-dasharray:4 3}
+.cell{fill:#FFFFFF;stroke:#D3D1C7;stroke-width:0.8}
+.cell.skip{fill:none;stroke:#D3D1C7;stroke-dasharray:2 3}
+.frame{fill:#F7F6FE;stroke:#534AB7;stroke-width:1}
+.agent-t{fill:#3C3489}
+.ghead{fill:#EEEDFE;stroke:none}
+.npanel{fill:#F7F6F2;stroke:#E3E1D8;stroke-width:0.8}
+.sep{stroke:#E3E1D8;stroke-width:0.8}
+.arr{fill:none;stroke:#888780;stroke-width:1.5}
+.head{fill:none;stroke:#888780}
+.dot{fill:#888780}
+.ndot{fill:#B4B2A9}
+.badge{fill:#2C2C2A}
+.badge-t{font-size:12px;font-weight:600;fill:#FFFFFF}
+.chip>text{font-size:11px;font-weight:500}
+.k-gpu>rect{fill:#FAECE7;stroke:#D85A30;stroke-width:0.9}
+.k-gpu>text{fill:#712B13}
+.k-cpu>rect{fill:#E1F5EE;stroke:#1D9E75;stroke-width:0.9}
+.k-cpu>text{fill:#085041}
+.k-none>rect{fill:#F1EFE8;stroke:#B4B2A9;stroke-width:0.8}
+.k-none>text{fill:#5F5E5A}
+@media (prefers-color-scheme:dark){
+.bg{fill:#1C1C1B}
+.title,.th,.th2,.tc,.ch,.gl,.nh,.code{fill:#F1EFE8}
+.ts,.tsm,.code2{fill:#B4B2A9}
+.tf{fill:#888780}
+.gh,.agent-t{fill:#CECBF6}
+.box{fill:#1C1C1B;stroke:#888780}
+.box.alt{fill:#232321}
+.cell{fill:#1C1C1B;stroke:#444441}
+.cell.skip{fill:none;stroke:#444441}
+.frame{fill:#1F1D33;stroke:#AFA9EC}
+.ghead{fill:#2E2A55}
+.npanel{fill:#242422;stroke:#3A3A37}
+.sep{stroke:#3A3A37}
+.arr,.head{stroke:#B4B2A9}
+.dot{fill:#B4B2A9}
+.ndot{fill:#5F5E5A}
+.badge{fill:#F1EFE8}
+.badge-t{fill:#1C1C1B}
+.k-gpu>rect{fill:#4A1B0C;stroke:#F0997B}
+.k-gpu>text{fill:#F5C4B3}
+.k-cpu>rect{fill:#04342C;stroke:#5DCAA5}
+.k-cpu>text{fill:#9FE1CB}
+.k-none>rect{fill:#2C2C2A;stroke:#5F5E5A}
+.k-none>text{fill:#B4B2A9}
+}
+</style>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head" d="M2 1L8 5L2 9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect class="bg" width="1140" height="2550" rx="12"/>
+<text class="title" x="32.0" y="34.0" dominant-baseline="central">防詐 Copilot 主要架構：每一步呼叫的模型、跑在 CPU 或 GPU、載入哪一種記憶體</text>
+<text class="ts" x="32.0" y="58.0" dominant-baseline="central">專題主要架構（2026-09-24 定案）。其他流程圖已列為廢案，保存在 docs/廢案/。</text>
+<text class="ts" x="32.0" y="78.0" dominant-baseline="central">現況對到 a-rag 的 2c2662f。2026-09-24 在 A 的 Mac（M5）實跑確認：執行紀錄的步驟順序、ollama ps、onnxruntime 的 providers、bge-m3 參數所在的裝置。</text>
+<g class="chip k-gpu"><rect x="32.0" y="99.0" width="37.1" height="18" rx="9"/><text x="50.5" y="108.0" text-anchor="middle" dominant-baseline="central">GPU</text></g>
+<g class="chip k-gpu"><rect x="74.1" y="99.0" width="69.0" height="18" rx="9"/><text x="108.6" y="108.0" text-anchor="middle" dominant-baseline="central">顯卡記憶體</text></g>
+<text class="ts" x="151.1" y="108.0" dominant-baseline="central">小模型 qwen2.5:3b（在 Ollama 裡跑）</text>
+<g class="chip k-cpu"><rect x="392.4" y="99.0" width="37.1" height="18" rx="9"/><text x="410.9" y="108.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-cpu"><rect x="434.5" y="99.0" width="47.0" height="18" rx="9"/><text x="458.0" y="108.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<text class="ts" x="489.5" y="108.0" dominant-baseline="central">嵌入 bge-m3、OCR PP-OCRv6 small</text>
+<g class="chip k-none"><rect x="727.9" y="99.0" width="91.0" height="18" rx="9"/><text x="773.4" y="108.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<text class="ts" x="826.9" y="108.0" dominant-baseline="central">詞表、規則比對</text>
+<rect class="box dash" x="936.9" y="100.0" width="22.0" height="16.0" rx="4"/>
+<text class="ts" x="966.9" y="108.0" dominant-baseline="central">尚未建立／空殼</text>
+<text class="nh" x="724.0" y="142.0" dominant-baseline="central">右側：每個動作對應的程式碼</text>
+<text class="ts" x="896.5" y="142.0" dominant-baseline="central">modules/、shared/ 在 packages/ 裡</text>
+<rect class="box" x="56.0" y="160.0" width="640.0" height="206.0" rx="8"/>
+<rect class="npanel" x="724.0" y="194.0" width="392.0" height="172.0" rx="8"/>
+<circle class="badge" cx="76.0" cy="183.0" r="11"/>
+<text class="badge-t" x="76.0" y="183.0" text-anchor="middle" dominant-baseline="central">0</text>
+<text class="th" x="96.0" y="183.0" dominant-baseline="central">開機：載入外殼、模組與嵌入模型（每個行程一次）</text>
+<circle class="dot" cx="101.0" cy="211.0" r="2.2"/>
+<text class="ts" x="110.0" y="211.0" dominant-baseline="central">畫出介面：Streamlit，兩個分頁（對話／單次查詢）</text>
+<circle class="ndot" cx="736.0" cy="211.0" r="2.2"/>
+<text class="code" x="746.0" y="211.0" dominant-baseline="central">app/ui.py · main()</text>
+<circle class="dot" cx="101.0" cy="232.0" r="2.2"/>
+<text class="ts" x="110.0" y="232.0" dominant-baseline="central">建外殼：註冊表＋解鎖層；畫面每次重跑都會重建</text>
+<circle class="ndot" cx="736.0" cy="232.0" r="2.2"/>
+<text class="code" x="746.0" y="232.0" dominant-baseline="central">app/shell.py · Shell.boot()</text>
+<circle class="dot" cx="101.0" cy="253.0" r="2.2"/>
+<text class="ts" x="110.0" y="253.0" dominant-baseline="central">掃模組：A、C、E 載入；B、D 沒有 pack.yaml，掃不到</text>
+<circle class="ndot" cx="736.0" cy="253.0" r="2.2"/>
+<text class="code" x="746.0" y="253.0" dominant-baseline="central">app/registry.py · load()、discover()</text>
+<circle class="dot" cx="101.0" cy="274.0" r="2.2"/>
+<text class="ts" x="110.0" y="274.0" dominant-baseline="central">各模組回報健康狀態（會讀自己的語料檔）</text>
+<circle class="ndot" cx="736.0" cy="274.0" r="2.2"/>
+<text class="code" x="746.0" y="274.0" dominant-baseline="central">modules/*/module.py · build_module()、health()</text>
+<circle class="dot" cx="101.0" cy="295.0" r="2.2"/>
+<text class="ts" x="110.0" y="295.0" dominant-baseline="central">背景執行緒預熱 bge-m3，使用者打字時就載完</text>
+<circle class="ndot" cx="736.0" cy="295.0" r="2.2"/>
+<text class="code" x="746.0" y="295.0" dominant-baseline="central">app/ui.py · _warm_up_embedder()</text>
+<circle class="dot" cx="101.0" cy="316.0" r="2.2"/>
+<text class="ts" x="110.0" y="316.0" dominant-baseline="central">載入權重：寫死 CPU、fp32；整個行程只載一次</text>
+<circle class="ndot" cx="736.0" cy="316.0" r="2.2"/>
+<text class="code" x="746.0" y="316.0" dominant-baseline="central">shared/models.py · embed()、_load_embedder()</text>
+<g class="chip k-cpu"><rect x="110.0" y="334.0" width="157.9" height="18" rx="9"/><text x="188.9" y="343.0" text-anchor="middle" dominant-baseline="central">bge-m3　568M 參數・fp32</text></g>
+<g class="chip k-cpu"><rect x="272.9" y="334.0" width="37.1" height="18" rx="9"/><text x="291.4" y="343.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-cpu"><rect x="315.0" y="334.0" width="100.2" height="18" rx="9"/><text x="365.1" y="343.0" text-anchor="middle" dominant-baseline="central">記憶體 約 2.2 GB</text></g>
+<line class="arr" x1="251.0" y1="366.0" x2="251.0" y2="398.0" marker-end="url(#arrow)"/>
+<text class="ts" x="263.0" y="386.0" dominant-baseline="central">開機完成，等使用者開口</text>
+<rect class="box" x="56.0" y="406.0" width="640.0" height="143.0" rx="8"/>
+<rect class="npanel" x="724.0" y="440.0" width="392.0" height="109.0" rx="8"/>
+<circle class="badge" cx="76.0" cy="429.0" r="11"/>
+<text class="badge-t" x="76.0" y="429.0" text-anchor="middle" dominant-baseline="central">1</text>
+<text class="th" x="96.0" y="429.0" dominant-baseline="central">使用者輸入：打字，可以附截圖</text>
+<circle class="dot" cx="101.0" cy="457.0" r="2.2"/>
+<text class="ts" x="110.0" y="457.0" dominant-baseline="central">送出這一句；上傳框裡的截圖跟著一起交出</text>
+<circle class="ndot" cx="736.0" cy="457.0" r="2.2"/>
+<text class="code" x="746.0" y="457.0" dominant-baseline="central">app/ui.py · _chat_tab()、_uploads_to_images()</text>
+<circle class="dot" cx="101.0" cy="478.0" r="2.2"/>
+<text class="ts" x="110.0" y="478.0" dominant-baseline="central">截圖存到本機暫存目錄，檔名用內容雜湊（同一張只存一份）</text>
+<circle class="ndot" cx="736.0" cy="478.0" r="2.2"/>
+<text class="code" x="746.0" y="478.0" dominant-baseline="central">app/uploads.py · save_upload()</text>
+<circle class="dot" cx="101.0" cy="499.0" r="2.2"/>
+<text class="ts" x="110.0" y="499.0" dominant-baseline="central">同一張圖只加一次；這一句併進對話紀錄</text>
+<circle class="ndot" cx="736.0" cy="499.0" r="2.2"/>
+<text class="code" x="746.0" y="499.0" dominant-baseline="central">app/chat.py · ChatSession.add_images()、send()</text>
+<g class="chip k-none"><rect x="110.0" y="517.0" width="91.0" height="18" rx="9"/><text x="155.5" y="526.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="206.0" y="517.0" width="37.1" height="18" rx="9"/><text x="224.6" y="526.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-none"><rect x="248.1" y="517.0" width="47.0" height="18" rx="9"/><text x="271.6" y="526.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<line class="arr" x1="251.0" y1="549.0" x2="251.0" y2="581.0" marker-end="url(#arrow)"/>
+<rect class="box" x="56.0" y="589.0" width="640.0" height="143.0" rx="8"/>
+<rect class="npanel" x="724.0" y="623.0" width="392.0" height="109.0" rx="8"/>
+<circle class="badge" cx="76.0" cy="612.0" r="11"/>
+<text class="badge-t" x="76.0" y="612.0" text-anchor="middle" dominant-baseline="central">2</text>
+<text class="th" x="96.0" y="612.0" dominant-baseline="central">對話層：追問三輪</text>
+<circle class="dot" cx="101.0" cy="640.0" r="2.2"/>
+<text class="ts" x="110.0" y="640.0" dominant-baseline="central">每一輪先跑一次 ③ 的路由，只為了畫「分數怎麼變」那張圖</text>
+<circle class="ndot" cx="736.0" cy="640.0" r="2.2"/>
+<text class="code" x="746.0" y="640.0" dominant-baseline="central">app/chat.py · _advance()、_scores()</text>
+<circle class="dot" cx="101.0" cy="661.0" r="2.2"/>
+<text class="ts" x="110.0" y="661.0" dominant-baseline="central">偵測到受災訊號，先給停損三條與 165（不等追問完）</text>
+<circle class="ndot" cx="736.0" cy="661.0" r="2.2"/>
+<text class="code" x="746.0" y="661.0" dominant-baseline="central">app/chat.py · _distress_advice()</text>
+<circle class="dot" cx="101.0" cy="682.0" r="2.2"/>
+<text class="ts" x="110.0" y="682.0" dominant-baseline="central">挑還沒講過的格子問；追問用的詞彙讀各模組的 pack.yaml</text>
+<circle class="ndot" cx="736.0" cy="682.0" r="2.2"/>
+<text class="code" x="746.0" y="682.0" dominant-baseline="central">app/chat.py · _filled()、_next_question()</text>
+<g class="chip k-none"><rect x="110.0" y="700.0" width="91.0" height="18" rx="9"/><text x="155.5" y="709.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="206.0" y="700.0" width="37.1" height="18" rx="9"/><text x="224.6" y="709.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-none"><rect x="248.1" y="700.0" width="47.0" height="18" rx="9"/><text x="271.6" y="709.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<path class="arr" d="M56.0 621.0 H32.0 V438.0 H48.0" marker-end="url(#arrow)"/>
+<text class="ts" x="66.0" y="569.0" dominant-baseline="central">↻ 還沒問滿三題就回到 ①</text>
+<line class="arr" x1="251.0" y1="732.0" x2="251.0" y2="764.0" marker-end="url(#arrow)"/>
+<text class="ts" x="263.0" y="752.0" dominant-baseline="central">問滿三題，或按「直接看結果」→ shell.analyze()</text>
+<rect class="box" x="56.0" y="772.0" width="640.0" height="261.0" rx="8"/>
+<rect class="npanel" x="724.0" y="806.0" width="392.0" height="227.0" rx="8"/>
+<circle class="badge" cx="76.0" cy="795.0" r="11"/>
+<text class="badge-t" x="76.0" y="795.0" text-anchor="middle" dominant-baseline="central">3</text>
+<text class="th" x="96.0" y="795.0" dominant-baseline="central">路由：A～E 每個模組自己打分 can_handle()</text>
+<circle class="dot" cx="101.0" cy="823.0" r="2.2"/>
+<text class="ts" x="110.0" y="823.0" dominant-baseline="central">問每個載入的模組；分數過自己的 route_min 才算認領</text>
+<circle class="ndot" cx="736.0" cy="823.0" r="2.2"/>
+<text class="code" x="746.0" y="823.0" dominant-baseline="central">app/router.py · route()、_ask()</text>
+<circle class="ndot" cx="736.0" cy="854.0" r="2.2"/>
+<text class="code" x="746.0" y="854.0" dominant-baseline="central">A · modules/a_tbd/module.py · can_handle()</text>
+<circle class="ndot" cx="736.0" cy="869.0" r="2.2"/>
+<text class="code" x="746.0" y="869.0" dominant-baseline="central">A · modules/a_tbd/m2_vision.py · read_all()</text>
+<circle class="ndot" cx="736.0" cy="884.0" r="2.2"/>
+<text class="code" x="746.0" y="884.0" dominant-baseline="central">A · modules/a_tbd/m4_judgement.py · keyword_score()</text>
+<circle class="ndot" cx="736.0" cy="899.0" r="2.2"/>
+<text class="code" x="746.0" y="899.0" dominant-baseline="central">B · modules/b_tbd/README.md（只有這個檔）</text>
+<circle class="ndot" cx="736.0" cy="914.0" r="2.2"/>
+<text class="code" x="746.0" y="914.0" dominant-baseline="central">C · modules/c_tbd/module.py · can_handle()</text>
+<circle class="ndot" cx="736.0" cy="929.0" r="2.2"/>
+<text class="code" x="746.0" y="929.0" dominant-baseline="central">C · modules/c_tbd/m2_vision.py · read_screenshot()</text>
+<text class="code2" x="746.0" y="944.0" dominant-baseline="central">　（空殼）</text>
+<circle class="ndot" cx="736.0" cy="959.0" r="2.2"/>
+<text class="code" x="746.0" y="959.0" dominant-baseline="central">D · modules/d_tbd/README.md（只有這個檔）</text>
+<circle class="ndot" cx="736.0" cy="974.0" r="2.2"/>
+<text class="code" x="746.0" y="974.0" dominant-baseline="central">E · modules/e_tbd/module.py · can_handle()</text>
+<circle class="ndot" cx="736.0" cy="989.0" r="2.2"/>
+<text class="code" x="746.0" y="989.0" dominant-baseline="central">E · modules/e_tbd/m2_vision.py · read_screenshot()</text>
+<text class="code2" x="746.0" y="1004.0" dominant-baseline="central">　（空殼）</text>
+<rect class="cell" x="70.0" y="846.0" width="176.0" height="173.0" rx="6"/>
+<text class="ch" x="78.0" y="865.0" dominant-baseline="central">A　LINE</text>
+<text class="tsm" x="78.0" y="882.0" dominant-baseline="central">假投資・免費</text>
+<text class="tc" x="78.0" y="904.0" dominant-baseline="central">有截圖先用 OCR 讀出字</text>
+<g class="chip k-cpu"><rect x="78.0" y="918.0" width="104.6" height="18" rx="9"/><text x="130.3" y="927.0" text-anchor="middle" dominant-baseline="central">PP-OCRv6 small</text></g>
+<g class="chip k-cpu"><rect x="187.6" y="918.0" width="37.1" height="18" rx="9"/><text x="206.2" y="927.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-cpu"><rect x="78.0" y="940.0" width="47.0" height="18" rx="9"/><text x="101.5" y="949.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<text class="tf" x="78.0" y="971.5" dominant-baseline="central">第一張圖進來才載入引擎，</text>
+<text class="tf" x="78.0" y="986.5" dominant-baseline="central">結果依圖檔雜湊快取；</text>
+<text class="tf" x="78.0" y="1001.5" dominant-baseline="central">再算關鍵字分數 × 平台係數</text>
+<rect class="cell dash" x="255.0" y="846.0" width="70.0" height="173.0" rx="6"/>
+<text class="ch" x="263.0" y="865.0" dominant-baseline="central">B</text>
+<text class="tf" x="263.0" y="888.0" dominant-baseline="central">尚未建立</text>
+<text class="tf" x="263.0" y="904.0" dominant-baseline="central">題目還沒</text>
+<text class="tf" x="263.0" y="920.0" dominant-baseline="central">宣告</text>
+<rect class="cell" x="334.0" y="846.0" width="124.0" height="173.0" rx="6"/>
+<text class="ch" x="342.0" y="865.0" dominant-baseline="central">C　Facebook</text>
+<text class="tsm" x="342.0" y="882.0" dominant-baseline="central">投資詐騙・付費</text>
+<text class="tc" x="342.0" y="904.0" dominant-baseline="central">關鍵字＋平台加分</text>
+<text class="tc" x="342.0" y="920.0" dominant-baseline="central">截圖不處理（空殼）</text>
+<g class="chip k-none"><rect x="342.0" y="934.0" width="91.0" height="18" rx="9"/><text x="387.5" y="943.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="342.0" y="956.0" width="37.1" height="18" rx="9"/><text x="360.6" y="965.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<rect class="cell dash" x="467.0" y="846.0" width="70.0" height="173.0" rx="6"/>
+<text class="ch" x="475.0" y="865.0" dominant-baseline="central">D</text>
+<text class="tf" x="475.0" y="888.0" dominant-baseline="central">尚未建立</text>
+<text class="tf" x="475.0" y="904.0" dominant-baseline="central">只有題目</text>
+<text class="tf" x="475.0" y="920.0" dominant-baseline="central">README</text>
+<rect class="cell" x="546.0" y="846.0" width="124.0" height="173.0" rx="6"/>
+<text class="ch" x="554.0" y="865.0" dominant-baseline="central">E　Threads</text>
+<text class="tsm" x="554.0" y="882.0" dominant-baseline="central">網購詐騙・付費</text>
+<text class="tc" x="554.0" y="904.0" dominant-baseline="central">關鍵字＋決定性詞</text>
+<text class="tc" x="554.0" y="920.0" dominant-baseline="central">＋平台加分</text>
+<text class="tc" x="554.0" y="936.0" dominant-baseline="central">截圖不處理（空殼）</text>
+<g class="chip k-none"><rect x="554.0" y="950.0" width="91.0" height="18" rx="9"/><text x="599.5" y="959.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="554.0" y="972.0" width="37.1" height="18" rx="9"/><text x="572.5" y="981.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<line class="arr" x1="251.0" y1="1033.0" x2="251.0" y2="1065.0" marker-end="url(#arrow)"/>
+<text class="ts" x="263.0" y="1053.0" dominant-baseline="central">收齊 A、C、E 的分數</text>
+<rect class="box" x="56.0" y="1073.0" width="390.0" height="185.0" rx="8"/>
+<rect class="npanel" x="724.0" y="1107.0" width="392.0" height="151.0" rx="8"/>
+<circle class="badge" cx="76.0" cy="1096.0" r="11"/>
+<text class="badge-t" x="76.0" y="1096.0" text-anchor="middle" dominant-baseline="central">4</text>
+<text class="th" x="96.0" y="1096.0" dominant-baseline="central">選模組：只交給分數最高的一個</text>
+<circle class="dot" cx="101.0" cy="1124.0" r="2.2"/>
+<text class="ts" x="110.0" y="1124.0" dominant-baseline="central">分數最高的出完整判讀；打平時看 priority</text>
+<circle class="ndot" cx="736.0" cy="1124.0" r="2.2"/>
+<text class="code" x="746.0" y="1124.0" dominant-baseline="central">app/router.py · route()</text>
+<circle class="dot" cx="101.0" cy="1145.0" r="2.2"/>
+<text class="ts" x="110.0" y="1145.0" dominant-baseline="central">其他過門檻或接近門檻的，只出「你可能同時也遇到」</text>
+<circle class="ndot" cx="736.0" cy="1145.0" r="2.2"/>
+<text class="code" x="746.0" y="1145.0" dominant-baseline="central">app/shell.py · Shell.analyze()</text>
+<circle class="dot" cx="101.0" cy="1166.0" r="2.2"/>
+<text class="ts" x="110.0" y="1166.0" dominant-baseline="central">選中的模組先過解鎖檢查（A 免費，C、E 付費）</text>
+<circle class="ndot" cx="736.0" cy="1166.0" r="2.2"/>
+<text class="code" x="746.0" y="1166.0" dominant-baseline="central">app/entitlements.py · can_use()</text>
+<circle class="dot" cx="101.0" cy="1187.0" r="2.2"/>
+<text class="ts" x="110.0" y="1187.0" dominant-baseline="central">沒有模組過門檻 → 分支「尚未涵蓋」</text>
+<circle class="ndot" cx="736.0" cy="1187.0" r="2.2"/>
+<text class="code" x="746.0" y="1187.0" dominant-baseline="central">app/shell.py · GENERAL_ADVICE</text>
+<circle class="dot" cx="101.0" cy="1208.0" r="2.2"/>
+<text class="ts" x="110.0" y="1208.0" dominant-baseline="central">選中的模組未解鎖 → 分支「未解鎖」</text>
+<circle class="ndot" cx="736.0" cy="1208.0" r="2.2"/>
+<text class="code" x="746.0" y="1208.0" dominant-baseline="central">app/entitlements.py · locked_notice()</text>
+<g class="chip k-none"><rect x="110.0" y="1226.0" width="91.0" height="18" rx="9"/><text x="155.5" y="1235.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="206.0" y="1226.0" width="37.1" height="18" rx="9"/><text x="224.6" y="1235.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-none"><rect x="248.1" y="1226.0" width="47.0" height="18" rx="9"/><text x="271.6" y="1235.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<rect class="box alt" x="482.0" y="1107.5" width="214.0" height="52.0" rx="8"/>
+<text class="th2" x="494.0" y="1124.5" dominant-baseline="central">尚未涵蓋</text>
+<text class="tc" x="494.0" y="1143.5" dominant-baseline="central">只給通用建議＋165 → ⑥</text>
+<path class="arr" d="M446.0 1165.5 H460.0 V1133.5 H474.0" marker-end="url(#arrow)"/>
+<rect class="box alt" x="482.0" y="1171.5" width="214.0" height="52.0" rx="8"/>
+<text class="th2" x="494.0" y="1188.5" dominant-baseline="central">未解鎖</text>
+<text class="tc" x="494.0" y="1207.5" dominant-baseline="central">只說類型，風險與 165 照給 → ⑥</text>
+<path class="arr" d="M446.0 1165.5 H460.0 V1197.5 H474.0" marker-end="url(#arrow)"/>
+<line class="arr" x1="251.0" y1="1258.0" x2="251.0" y2="1290.0" marker-end="url(#arrow)"/>
+<text class="ts" x="263.0" y="1278.0" dominant-baseline="central">有模組認領、而且已解鎖</text>
+<rect class="frame" x="56.0" y="1298.0" width="640.0" height="794.0" rx="10"/>
+<rect class="npanel" x="724.0" y="1332.0" width="392.0" height="760.0" rx="8"/>
+<circle class="badge" cx="76.0" cy="1321.0" r="11"/>
+<text class="badge-t" x="76.0" y="1321.0" text-anchor="middle" dominant-baseline="central">5</text>
+<text class="th agent-t" x="96.0" y="1321.0" dominant-baseline="central">M5 Agent：被選中的模組跑自己的流水線</text>
+<circle class="dot" cx="101.0" cy="1349.0" r="2.2"/>
+<text class="ts" x="110.0" y="1349.0" dominant-baseline="central">analyze() → m5_agent.run()：由上而下依序執行；一步壞掉只降級，不中斷</text>
+<circle class="ndot" cx="736.0" cy="1349.0" r="2.2"/>
+<text class="code" x="746.0" y="1349.0" dominant-baseline="central">modules/*/module.py · analyze()</text>
+<circle class="ndot" cx="736.0" cy="1364.0" r="2.2"/>
+<text class="code" x="746.0" y="1364.0" dominant-baseline="central">modules/*/m5_agent.py · run()、_step()</text>
+<circle class="dot" cx="101.0" cy="1385.0" r="2.2"/>
+<text class="ts" x="110.0" y="1385.0" dominant-baseline="central">B、D 還沒有模組，不會走到這一段</text>
+<rect class="ghead" x="68.0" y="1405.0" width="84.0" height="26.0" rx="5"/>
+<text class="gh" x="76.0" y="1418.0" dominant-baseline="central">步驟</text>
+<rect class="ghead" x="160.0" y="1405.0" width="169.3" height="26.0" rx="5"/>
+<text class="gh" x="168.0" y="1418.0" dominant-baseline="central">A　LINE 假投資</text>
+<rect class="ghead" x="337.3" y="1405.0" width="169.3" height="26.0" rx="5"/>
+<text class="gh" x="345.3" y="1418.0" dominant-baseline="central">C　Facebook 投資</text>
+<rect class="ghead" x="514.7" y="1405.0" width="169.3" height="26.0" rx="5"/>
+<text class="gh" x="522.7" y="1418.0" dominant-baseline="central">E　Threads 網購</text>
+<text class="gl" x="76.0" y="1455.0" dominant-baseline="central">m2</text>
+<text class="tsm" x="76.0" y="1471.0" dominant-baseline="central">截圖理解</text>
+<rect class="cell" x="160.0" y="1439.0" width="169.3" height="77.0" rx="6"/>
+<text class="tc" x="168.0" y="1455.0" dominant-baseline="central">路由時辨識過就直接讀快取</text>
+<g class="chip k-cpu"><rect x="168.0" y="1468.0" width="104.6" height="18" rx="9"/><text x="220.3" y="1477.0" text-anchor="middle" dominant-baseline="central">PP-OCRv6 small</text></g>
+<g class="chip k-cpu"><rect x="277.6" y="1468.0" width="37.1" height="18" rx="9"/><text x="296.2" y="1477.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-cpu"><rect x="168.0" y="1490.0" width="47.0" height="18" rx="9"/><text x="191.5" y="1499.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<rect class="cell dash" x="337.3" y="1439.0" width="169.3" height="77.0" rx="6"/>
+<text class="tf" x="345.3" y="1455.0" dominant-baseline="central">空殼：截圖不處理</text>
+<rect class="cell dash" x="514.7" y="1439.0" width="169.3" height="77.0" rx="6"/>
+<text class="tf" x="522.7" y="1455.0" dominant-baseline="central">空殼：截圖不處理</text>
+<circle class="ndot" cx="736.0" cy="1455.0" r="2.2"/>
+<text class="code" x="746.0" y="1455.0" dominant-baseline="central">A · modules/a_tbd/m2_vision.py · read_all()</text>
+<circle class="ndot" cx="736.0" cy="1470.0" r="2.2"/>
+<text class="code" x="746.0" y="1470.0" dominant-baseline="central">C · modules/c_tbd/m2_vision.py（空殼）</text>
+<circle class="ndot" cx="736.0" cy="1485.0" r="2.2"/>
+<text class="code" x="746.0" y="1485.0" dominant-baseline="central">E · modules/e_tbd/m2_vision.py（空殼）</text>
+<line class="sep" x1="734.0" y1="1520.0" x2="1106.0" y2="1520.0"/>
+<text class="gl" x="76.0" y="1540.0" dominant-baseline="central">合併輸入</text>
+<rect class="cell" x="160.0" y="1524.0" width="524.0" height="34.0" rx="6"/>
+<text class="tc" x="168.0" y="1540.0" dominant-baseline="central">打字＋截圖上的文字接成一段</text>
+<g class="chip k-none"><rect x="329.5" y="1531.0" width="91.0" height="18" rx="9"/><text x="375.0" y="1540.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="425.5" y="1531.0" width="37.1" height="18" rx="9"/><text x="444.1" y="1540.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-none"><rect x="467.6" y="1531.0" width="47.0" height="18" rx="9"/><text x="491.1" y="1540.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<circle class="ndot" cx="736.0" cy="1540.0" r="2.2"/>
+<text class="code" x="746.0" y="1540.0" dominant-baseline="central">modules/*/m5_agent.py · combine()（run() 裡的內部函式）</text>
+<line class="sep" x1="734.0" y1="1562.0" x2="1106.0" y2="1562.0"/>
+<text class="gl" x="76.0" y="1582.0" dominant-baseline="central">去識別化</text>
+<text class="tsm" x="76.0" y="1598.0" dominant-baseline="central">shared.deid</text>
+<rect class="cell" x="160.0" y="1566.0" width="524.0" height="48.0" rx="6"/>
+<text class="tc" x="168.0" y="1582.0" dominant-baseline="central">規則比對遮個資（NER 還沒接）</text>
+<g class="chip k-none"><rect x="345.6" y="1573.0" width="91.0" height="18" rx="9"/><text x="391.1" y="1582.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="441.6" y="1573.0" width="37.1" height="18" rx="9"/><text x="460.2" y="1582.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-none"><rect x="483.7" y="1573.0" width="47.0" height="18" rx="9"/><text x="507.2" y="1582.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<circle class="ndot" cx="736.0" cy="1582.0" r="2.2"/>
+<text class="code" x="746.0" y="1582.0" dominant-baseline="central">shared/deid.py · mask()</text>
+<text class="code2" x="746.0" y="1597.0" dominant-baseline="central">　（m5_agent.py 的 apply_deid() 呼叫它）</text>
+<line class="sep" x1="734.0" y1="1618.0" x2="1106.0" y2="1618.0"/>
+<text class="gl" x="76.0" y="1638.0" dominant-baseline="central">m4</text>
+<text class="tsm" x="76.0" y="1654.0" dominant-baseline="central">分類與階段</text>
+<rect class="cell" x="160.0" y="1622.0" width="346.7" height="109.0" rx="6"/>
+<text class="tc" x="168.0" y="1638.0" dominant-baseline="central">線索詞規則判階段；小模型的 prompt 還沒寫，不呼叫</text>
+<g class="chip k-none"><rect x="168.0" y="1651.0" width="91.0" height="18" rx="9"/><text x="213.5" y="1660.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="264.0" y="1651.0" width="37.1" height="18" rx="9"/><text x="282.6" y="1660.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-none"><rect x="306.1" y="1651.0" width="47.0" height="18" rx="9"/><text x="329.6" y="1660.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<rect class="cell" x="514.7" y="1622.0" width="169.3" height="109.0" rx="6"/>
+<text class="tc" x="522.7" y="1638.0" dominant-baseline="central">先送空 prompt 給小模型、</text>
+<text class="tc" x="522.7" y="1654.0" dominant-baseline="central">回答丟掉不用，</text>
+<text class="tc" x="522.7" y="1670.0" dominant-baseline="central">再走 12 階段規則</text>
+<g class="chip k-gpu"><rect x="522.7" y="1683.0" width="76.0" height="18" rx="9"/><text x="560.7" y="1692.0" text-anchor="middle" dominant-baseline="central">qwen2.5:3b</text></g>
+<g class="chip k-gpu"><rect x="603.7" y="1683.0" width="37.1" height="18" rx="9"/><text x="622.3" y="1692.0" text-anchor="middle" dominant-baseline="central">GPU</text></g>
+<g class="chip k-gpu"><rect x="522.7" y="1705.0" width="69.0" height="18" rx="9"/><text x="557.2" y="1714.0" text-anchor="middle" dominant-baseline="central">顯卡記憶體</text></g>
+<circle class="ndot" cx="736.0" cy="1638.0" r="2.2"/>
+<text class="code" x="746.0" y="1638.0" dominant-baseline="central">modules/*/m4_judgement.py · judge()</text>
+<circle class="ndot" cx="736.0" cy="1653.0" r="2.2"/>
+<text class="code" x="746.0" y="1653.0" dominant-baseline="central">E · modules/e_tbd/threads_stages.py · assess()</text>
+<circle class="ndot" cx="736.0" cy="1668.0" r="2.2"/>
+<text class="code" x="746.0" y="1668.0" dominant-baseline="central">E · shared/models.py · call_slm("")（空 prompt）</text>
+<line class="sep" x1="734.0" y1="1735.0" x2="1106.0" y2="1735.0"/>
+<text class="gl" x="76.0" y="1755.0" dominant-baseline="central">m3</text>
+<text class="tsm" x="76.0" y="1771.0" dominant-baseline="central">檢索相似案例</text>
+<rect class="cell" x="160.0" y="1739.0" width="169.3" height="137.0" rx="6"/>
+<text class="tc" x="168.0" y="1755.0" dominant-baseline="central">先過關鍵字門檻，</text>
+<text class="tc" x="168.0" y="1771.0" dominant-baseline="central">bge-m3 編碼問句，</text>
+<text class="tc" x="168.0" y="1787.0" dominant-baseline="central">和 17,764 筆向量算內積</text>
+<text class="tc" x="168.0" y="1803.0" dominant-baseline="central">＋手法詞加分，取前 5 筆</text>
+<g class="chip k-cpu"><rect x="168.0" y="1816.0" width="55.4" height="18" rx="9"/><text x="195.7" y="1825.0" text-anchor="middle" dominant-baseline="central">bge-m3</text></g>
+<g class="chip k-cpu"><rect x="228.4" y="1816.0" width="37.1" height="18" rx="9"/><text x="246.9" y="1825.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-cpu"><rect x="270.5" y="1816.0" width="47.0" height="18" rx="9"/><text x="294.0" y="1825.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<text class="tf" x="168.0" y="1845.5" dominant-baseline="central">索引 73 MB，每次查詢</text>
+<text class="tf" x="168.0" y="1860.5" dominant-baseline="central">從磁碟讀進記憶體</text>
+<rect class="cell" x="337.3" y="1739.0" width="169.3" height="137.0" rx="6"/>
+<text class="tc" x="345.3" y="1755.0" dominant-baseline="central">bge-m3 編碼問句，</text>
+<text class="tc" x="345.3" y="1771.0" dominant-baseline="central">和 10,051 筆向量算內積，</text>
+<text class="tc" x="345.3" y="1787.0" dominant-baseline="central">門檻 0.60，取前 5 筆</text>
+<g class="chip k-cpu"><rect x="345.3" y="1800.0" width="55.4" height="18" rx="9"/><text x="373.0" y="1809.0" text-anchor="middle" dominant-baseline="central">bge-m3</text></g>
+<g class="chip k-cpu"><rect x="405.7" y="1800.0" width="37.1" height="18" rx="9"/><text x="424.2" y="1809.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-cpu"><rect x="447.8" y="1800.0" width="47.0" height="18" rx="9"/><text x="471.3" y="1809.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<text class="tf" x="345.3" y="1829.5" dominant-baseline="central">索引 64 MB，每次讀進</text>
+<text class="tf" x="345.3" y="1844.5" dominant-baseline="central">記憶體，也整份寫回磁碟</text>
+<rect class="cell" x="514.7" y="1739.0" width="169.3" height="137.0" rx="6"/>
+<text class="tc" x="522.7" y="1755.0" dominant-baseline="central">字元 2-gram 重疊比對，</text>
+<text class="tc" x="522.7" y="1771.0" dominant-baseline="central">沒有向量</text>
+<g class="chip k-none"><rect x="522.7" y="1784.0" width="91.0" height="18" rx="9"/><text x="568.2" y="1793.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="618.7" y="1784.0" width="37.1" height="18" rx="9"/><text x="637.2" y="1793.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-none"><rect x="522.7" y="1806.0" width="47.0" height="18" rx="9"/><text x="546.2" y="1815.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<circle class="ndot" cx="736.0" cy="1755.0" r="2.2"/>
+<text class="code" x="746.0" y="1755.0" dominant-baseline="central">modules/*/m3_retrieval.py · search()</text>
+<circle class="ndot" cx="736.0" cy="1770.0" r="2.2"/>
+<text class="code" x="746.0" y="1770.0" dominant-baseline="central">A · modules/a_tbd/m3_retrieval.py</text>
+<text class="code2" x="746.0" y="1785.0" dominant-baseline="central">　_gate_keyword()、_vector_scores()</text>
+<circle class="ndot" cx="736.0" cy="1800.0" r="2.2"/>
+<text class="code" x="746.0" y="1800.0" dominant-baseline="central">C · modules/c_tbd/m3_retrieval.py</text>
+<text class="code2" x="746.0" y="1815.0" dominant-baseline="central">　Retriever.retrieve()、NumpyStore</text>
+<circle class="ndot" cx="736.0" cy="1830.0" r="2.2"/>
+<text class="code" x="746.0" y="1830.0" dominant-baseline="central">shared/models.py · embed()（問句向量）</text>
+<line class="sep" x1="734.0" y1="1880.0" x2="1106.0" y2="1880.0"/>
+<text class="gl" x="76.0" y="1900.0" dominant-baseline="central">生成</text>
+<text class="tsm" x="76.0" y="1916.0" dominant-baseline="central">白話說明（G）</text>
+<rect class="cell skip" x="160.0" y="1884.0" width="169.3" height="127.0" rx="6"/>
+<text class="tf" x="168.0" y="1900.0" dominant-baseline="central">（沒有這一步）</text>
+<rect class="cell" x="337.3" y="1884.0" width="169.3" height="127.0" rx="6"/>
+<text class="tc" x="345.3" y="1900.0" dominant-baseline="central">qwen2.5:3b 讀遮蔽文字</text>
+<text class="tc" x="345.3" y="1916.0" dominant-baseline="central">＋前 3 筆案例寫說明</text>
+<g class="chip k-gpu"><rect x="345.3" y="1929.0" width="123.6" height="18" rx="9"/><text x="407.1" y="1938.0" text-anchor="middle" dominant-baseline="central">qwen2.5:3b Q4_K_M</text></g>
+<g class="chip k-gpu"><rect x="345.3" y="1951.0" width="37.1" height="18" rx="9"/><text x="363.9" y="1960.0" text-anchor="middle" dominant-baseline="central">GPU</text></g>
+<g class="chip k-gpu"><rect x="387.4" y="1951.0" width="69.0" height="18" rx="9"/><text x="421.9" y="1960.0" text-anchor="middle" dominant-baseline="central">顯卡記憶體</text></g>
+<text class="tf" x="345.3" y="1980.5" dominant-baseline="central">失敗或超過 400 字，</text>
+<text class="tf" x="345.3" y="1995.5" dominant-baseline="central">退回劇本的固定說明</text>
+<rect class="cell skip" x="514.7" y="1884.0" width="169.3" height="127.0" rx="6"/>
+<text class="tf" x="522.7" y="1900.0" dominant-baseline="central">（沒有這一步）</text>
+<circle class="ndot" cx="736.0" cy="1900.0" r="2.2"/>
+<text class="code" x="746.0" y="1900.0" dominant-baseline="central">C · modules/c_tbd/generation.py</text>
+<text class="code2" x="746.0" y="1915.0" dominant-baseline="central">　explain()、build_prompt()</text>
+<circle class="ndot" cx="736.0" cy="1930.0" r="2.2"/>
+<text class="code" x="746.0" y="1930.0" dominant-baseline="central">shared/models.py · call_slm()</text>
+<text class="code2" x="746.0" y="1945.0" dominant-baseline="central">　（HTTP 送到 Ollama（127.0.0.1:11434））</text>
+<line class="sep" x1="734.0" y1="2015.0" x2="1106.0" y2="2015.0"/>
+<text class="gl" x="76.0" y="2035.0" dominant-baseline="central">合成判讀</text>
+<rect class="cell" x="160.0" y="2019.0" width="524.0" height="59.0" rx="6"/>
+<text class="tc" x="168.0" y="2035.0" dominant-baseline="central">playbook.yaml 的階段 → 風險等級與行動清單，附相似案例與法條</text>
+<g class="chip k-none"><rect x="168.0" y="2048.0" width="91.0" height="18" rx="9"/><text x="213.5" y="2057.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="264.0" y="2048.0" width="37.1" height="18" rx="9"/><text x="282.6" y="2057.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-none"><rect x="306.1" y="2048.0" width="47.0" height="18" rx="9"/><text x="329.6" y="2057.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<circle class="ndot" cx="736.0" cy="2035.0" r="2.2"/>
+<text class="code" x="746.0" y="2035.0" dominant-baseline="central">modules/*/m5_agent.py · _compose()</text>
+<circle class="ndot" cx="736.0" cy="2050.0" r="2.2"/>
+<text class="code" x="746.0" y="2050.0" dominant-baseline="central">modules/*/playbook.yaml（階段與行動清單）</text>
+<circle class="ndot" cx="736.0" cy="2065.0" r="2.2"/>
+<text class="code" x="746.0" y="2065.0" dominant-baseline="central">modules/*/pack.yaml（knowledge_refs（法條））</text>
+<line class="sep" x1="734.0" y1="2082.0" x2="1106.0" y2="2082.0"/>
+<line class="arr" x1="251.0" y1="2092.0" x2="251.0" y2="2124.0" marker-end="url(#arrow)"/>
+<text class="ts" x="263.0" y="2112.0" dominant-baseline="central">Verdict（判讀結果）</text>
+<rect class="box" x="56.0" y="2132.0" width="640.0" height="185.0" rx="8"/>
+<rect class="npanel" x="724.0" y="2166.0" width="392.0" height="151.0" rx="8"/>
+<circle class="badge" cx="76.0" cy="2155.0" r="11"/>
+<text class="badge-t" x="76.0" y="2155.0" text-anchor="middle" dominant-baseline="central">6</text>
+<text class="th" x="96.0" y="2155.0" dominant-baseline="central">輸出檢核與呈現</text>
+<circle class="dot" cx="101.0" cy="2183.0" r="2.2"/>
+<text class="ts" x="110.0" y="2183.0" dominant-baseline="central">高風險卻沒行動 → 改走通用建議；案例沒編號丟掉；免責聲明補回</text>
+<circle class="ndot" cx="736.0" cy="2183.0" r="2.2"/>
+<text class="code" x="746.0" y="2183.0" dominant-baseline="central">app/guards.py · enforce()、check()</text>
+<circle class="dot" cx="101.0" cy="2204.0" r="2.2"/>
+<text class="ts" x="110.0" y="2204.0" dominant-baseline="central">組成回應：判讀＋其他模組的提醒＋風險與 165</text>
+<circle class="ndot" cx="736.0" cy="2204.0" r="2.2"/>
+<text class="code" x="746.0" y="2204.0" dominant-baseline="central">app/shell.py · Shell.analyze()</text>
+<circle class="dot" cx="101.0" cy="2225.0" r="2.2"/>
+<text class="ts" x="110.0" y="2225.0" dominant-baseline="central">攤成對話訊息：純樣板，不生成新內容</text>
+<circle class="ndot" cx="736.0" cy="2225.0" r="2.2"/>
+<text class="code" x="746.0" y="2225.0" dominant-baseline="central">app/chat.py · _render()</text>
+<circle class="dot" cx="101.0" cy="2246.0" r="2.2"/>
+<text class="ts" x="110.0" y="2246.0" dominant-baseline="central">判讀之後的追問，只回答白名單裡的欄位</text>
+<circle class="ndot" cx="736.0" cy="2246.0" r="2.2"/>
+<text class="code" x="746.0" y="2246.0" dominant-baseline="central">app/chat.py · _follow_up()</text>
+<circle class="dot" cx="101.0" cy="2267.0" r="2.2"/>
+<text class="ts" x="110.0" y="2267.0" dominant-baseline="central">右側畫執行紀錄與「每問一題，分數怎麼變」</text>
+<circle class="ndot" cx="736.0" cy="2267.0" r="2.2"/>
+<text class="code" x="746.0" y="2267.0" dominant-baseline="central">app/ui.py · _render_trace()、_chat_tab()</text>
+<g class="chip k-none"><rect x="110.0" y="2285.0" width="91.0" height="18" rx="9"/><text x="155.5" y="2294.0" text-anchor="middle" dominant-baseline="central">無模型（規則）</text></g>
+<g class="chip k-none"><rect x="206.0" y="2285.0" width="37.1" height="18" rx="9"/><text x="224.6" y="2294.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
+<g class="chip k-none"><rect x="248.1" y="2285.0" width="47.0" height="18" rx="9"/><text x="271.6" y="2294.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
+<rect class="npanel" x="32.0" y="2345.0" width="1084.0" height="181.0" rx="8"/>
+<text class="nh" x="48.0" y="2367.0" dominant-baseline="central">裝置與記憶體的細節</text>
+<circle class="ndot" cx="52.0" cy="2389.0" r="2.2"/>
+<text class="ts" x="62.0" y="2389.0" dominant-baseline="central">GPU（C 的生成、E 的空呼叫）：qwen2.5:3b Q4_K_M 跑在 Ollama 自己的行程，不在 Python 裡；第一次呼叫才載入，閒置 5 分鐘自動卸載。</text>
+<text class="ts" x="62.0" y="2408.0" dominant-baseline="central">A 的 Mac（M5）是 Metal＋統一記憶體，ollama ps 顯示 2.4 GB、100% GPU。B、C 的 GTX 1650 是 CUDA＋4 GB 顯卡記憶體，實測約 2.3 GB、100% GPU。</text>
+<text class="ts" x="62.0" y="2427.0" dominant-baseline="central">D 的筆電沒有獨顯，Ollama 改裝在教室電腦（1050 Ti，4 GB，還沒實測）；沒有 GPU 的機器，Ollama 會退回 CPU 跑。</text>
+<text class="ts" x="62.0" y="2446.0" dominant-baseline="central">E 的 5070 Ti 有 16 GB，但全隊用同一個 3B 模型；num_ctx 一律鎖 8192。</text>
+<circle class="ndot" cx="52.0" cy="2465.0" r="2.2"/>
+<text class="ts" x="62.0" y="2465.0" dominant-baseline="central">CPU（bge-m3、OCR）：五台都一樣。bge-m3 寫死 cpu＋fp32，分數才能互比（實測參數在 cpu、float32）；OCR 的 onnxruntime 實測只開 CPUExecutionProvider。</text>
+<text class="ts" x="62.0" y="2484.0" dominant-baseline="central">兩者都在 Streamlit 的 Python 行程裡，載一次共用：bge-m3 約 2.2 GB；OCR 模型檔約 32 MB，跑圖時行程記憶體會長到約 1.5 GB。</text>
+<circle class="ndot" cx="52.0" cy="2503.0" r="2.2"/>
+<text class="ts" x="62.0" y="2503.0" dominant-baseline="central">不在查詢路徑上：重排序 bge-reranker-v2-m3（rerank() 還沒實作，決議只用在評估）；雲端模型（沒有任何地方呼叫 call_cloud()）。</text>
+</svg>
