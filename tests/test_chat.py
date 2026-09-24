@@ -21,7 +21,7 @@ from contracts import (
 from app.chat import MAX_CASES_SHOWN, MAX_QUESTIONS, ChatSession, Phase
 from app.entitlements import Entitlements
 from app.registry import LoadedModule
-from app.shell import Shell
+from app.shell import GENERAL_ADVICE, Shell
 
 
 class _假模組:
@@ -213,6 +213,26 @@ def test_沒出事的句子不會被當成受災():
     chat = _session([_wrap(_假模組("a", 0.0))])
     out = chat.send("我在fb上點了一個連結，連結讓我加line")
     assert "advice" not in _kinds(out)
+
+
+def test_最後一輪才出現受災訊號時不會說還要再問():
+    """問滿三題之後那句才講「匯款」—— 判讀就接在後面，不能再說「我再問你幾個問題」。"""
+    chat = _session([_wrap(_假模組("a", 0.9))])
+    for _ in range(MAX_QUESTIONS):
+        chat.send("嗯")
+    out = chat.send("我已經匯款五萬了")
+    assert chat.phase is Phase.DONE
+    assert "advice" in _kinds(out), "停損三條還是要給"
+    assert "再問你" not in _texts(out)
+
+
+def test_最後一輪才出現受災訊號_尚未涵蓋時停損三條只講一次():
+    """尚未涵蓋的判讀本身就附了同樣的三條，同一則回覆不該列兩遍。"""
+    chat = _session([_wrap(_假模組("a", 0.0))])
+    for _ in range(MAX_QUESTIONS):
+        chat.send("嗯")
+    out = _texts(chat.send("我已經匯款五萬了"))
+    assert out.count(GENERAL_ADVICE[0]) == 1
 
 
 # ── 輸出 ────────────────────────────────────────────────────

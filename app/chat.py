@@ -315,17 +315,21 @@ class ChatSession:
         self.turns += 1
         self.score_history.append(self._scores())
 
-        out: list[ChatMessage] = []
-        # 規矩二：風險與 165 不等追問完。偵測到錢出事了就先給停損三條，
-        # 然後照樣把剩下的輪數問完。
-        out.extend(self._distress_advice())
-
         # 不早停：就算已經有模組認領了，三題照問完。後面幾題的答案（怎麼付的、
         # 卡在哪一步）是模組判斷階段的線索，早停的話階段會判得比實際前面。
         if len(self.asked) >= self.max_questions:
-            out.extend(self._decide())
-            return out
+            # 最後一輪才偵測到受災訊號：判讀就接在後面，不能再說「我再問你幾個
+            # 問題」；尚未涵蓋的判讀本身就附了同樣的停損三條，不必同一則講兩遍。
+            advice = self._distress_advice(more_questions=False)
+            decided = self._decide()
+            assert self.response is not None
+            if self.response.coverage is CoverageStatus.UNCOVERED:
+                advice = []
+            return [*advice, *decided]
 
+        # 規矩二：風險與 165 不等追問完。偵測到錢出事了就先給停損三條，
+        # 然後照樣把剩下的輪數問完。
+        out = self._distress_advice(more_questions=True)
         out.append(ChatMessage("bot", self._next_question(), kind="ask"))
         return out
 
@@ -333,23 +337,28 @@ class ChatSession:
         payload = AnalyzeInput(text=self.text, images=self.images, session_id=self.session_id)
         return route(self.shell.registry, payload).scores
 
-    def _distress_advice(self) -> list[ChatMessage]:
+    def _distress_advice(self, *, more_questions: bool) -> list[ChatMessage]:
         if self.advice_given or not _hits(DISTRESS_TERMS, self.text):
             return []
         self.advice_given = True
-        return [
+        out = [
             ChatMessage(
                 "bot",
                 "先不管是哪一類 —— 聽起來錢已經出去了，下面三件事現在就可以做：",
                 kind="advice",
             ),
             *[ChatMessage("bot", f"・{a}", kind="advice") for a in GENERAL_ADVICE],
-            ChatMessage(
-                "bot",
-                f"☎️ 反詐騙諮詢專線 {HOTLINE}。我再問你幾個問題，才能告訴你這是哪一類、下一步會發生什麼。",
-                kind="note",
-            ),
         ]
+        if more_questions:
+            # 最後一輪不加這句：判讀緊接在後，而且判讀自己會附 165
+            out.append(
+                ChatMessage(
+                    "bot",
+                    f"☎️ 反詐騙諮詢專線 {HOTLINE}。我再問你幾個問題，才能告訴你這是哪一類、下一步會發生什麼。",
+                    kind="note",
+                )
+            )
+        return out
 
     def _filled(self) -> set[str]:
         """哪幾格已經知道了。詞彙從各模組的 pack.yaml 讀，不寫死在外殼。"""
