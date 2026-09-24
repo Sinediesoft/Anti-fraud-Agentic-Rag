@@ -258,24 +258,17 @@ def main() -> int:
     return _write(picked)
 
 
-PREV = HERE / "eval/gold_rater1_v2.json"
-
-
-def _load_prev() -> dict[str, str]:
-    """上一輪的標註。帶進頁面當參考，讓標註者只需檢查會變的那些。
-
-    這會造成 anchoring，但第三版判準只改動「自己匯出的損失 vs 帳戶被動用」
-    這一組的歸屬，其餘八成的題目答案不變 —— 全部重標一次的成本不划算。
-    參考答案在頁面上明確標示來源，不是偷偷預填。
-    """
-    if not PREV.exists():
-        return {}
-    data = json.loads(PREV.read_text(encoding="utf-8"))
-    return {x["case_id"]: x["stage"] for x in data.get("labels", [])}
-
-
 def _write(picked: list[dict]) -> int:
-    prev = _load_prev()
+    # `prev` 永遠留空 —— 不把上一輪的答案帶進頁面。
+    #
+    # v3 那次帶了 v2 的答案當參考（理由是判準只改一組、全部重標不划算），
+    # 結果 v2 vs v3 的 kappa 高達 0.906，卻分不出是「判準修好所以穩定」
+    # 還是「看到參考答案就按同一個」。拿掉參考重判 14 筆，13 筆改變 ——
+    # 那個 0.906 主要是 anchoring。
+    #
+    # 2026-09-24 這一輪更沒有帶的理由：與模組 D 談定界線後語料重切
+    # （9,167 → 4,140），舊的 60 筆有 31 筆已不在本模組範圍，樣本是全新抽的。
+    prev: dict[str, str] = {}
     rows = [
         {
             "case_id": c["case_id"],
@@ -299,16 +292,19 @@ def _write(picked: list[dict]) -> int:
     page = (
         PAGE.replace("__DATA__", json.dumps(rows, ensure_ascii=False).replace("</", "<\\/"))
         .replace("__STAGES__", json.dumps(stages_js, ensure_ascii=False))
-        .replace("__KEY__", "gold_s10_v3_rater1")
-        .replace("__RATER__", "rater1_v3")
+        # key 每一輪都要換：瀏覽器的 localStorage 還留著上一輪的標註，
+        # 沿用同一個 key 會讀到對不上的舊 marks
+        .replace("__KEY__", "gold_s10_v4_rater1")
+        .replace("__RATER__", "rater1_v4")
     )
     OUT_PAGE.write_text(page, encoding="utf-8")
 
     print(f"\n樣本   {OUT_SAMPLE.relative_to(HERE.parent.parent.parent)}（{len(rows)} 筆）")
     print(f"標註頁 {OUT_PAGE.relative_to(HERE.parent.parent.parent)}")
-    print("\n第二位標註者：複製同一份 HTML，把 localStorage key 從 gold_s10_rater1")
-    print("改成 rater2 即可（或直接在另一台瀏覽器／無痕視窗標）。")
-    print("兩份結果都存成 eval/gold_rater1.json、gold_rater2.json 後算 kappa。")
+    print("\n第二位標註者：同一份 HTML，在另一台瀏覽器或無痕視窗標即可")
+    print("（localStorage 是 gold_s10_v4_rater1，不同瀏覽器互不干擾）。")
+    print("兩份結果存成 eval/gold_rater1_v4.json、gold_rater2_v4.json 後算 kappa。")
+    print("⚠ 這份含真實案例原文，要交給組員請走實體或團隊共用硬碟。")
     return 0
 
 
