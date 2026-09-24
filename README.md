@@ -120,7 +120,7 @@ packages/modules/
   b_tbd/ … e_tbd/        其他四人的佔位
 tools/                   機器人：越界檢查、修改範圍檢查
 tests/                   規矩全部寫成測試
-docs/                    架構、模型版本表、GitHub 速查、怎麼新增第六個模組
+docs/                    架構、模型版本表、向量庫選型、GitHub 速查、怎麼新增第六個模組
 data/                    語料放這裡（不進版控）
 ```
 
@@ -138,5 +138,6 @@ data/                    語料放這裡（不進版控）
 - [架構](docs/architecture.md)
 - [GitHub 協作速查](docs/github-協作速查.md) ← 每天都會用
 - [模型版本表](docs/model-lock.md)
+- [向量庫選型](docs/向量庫選型.md) ← S12：為什麼維持 numpy（Chroma／Qdrant 實測）
 - [怎麼新增第六個模組](docs/新增模組.md)
 - 開發步驟示範說明書.pdf —— 不進版控（repo 公開），請到共用雲端硬碟取得
