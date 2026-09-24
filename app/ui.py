@@ -2,10 +2,10 @@
 
 兩個分頁：
 
-    ① 對話    多輪追問三題，再把所有認領的模組都喚起。app/chat.py 的外皮。
-    ② 單次查詢 原本的表單。留著是因為 evaluate.py 的 20 題與 S16 入場檢查
-              走的是 shell.analyze() 那條路 —— 砍掉等於自斷考核，而且展示時
-              兩邊對照著看，才說得出對話層到底加了什麼。
+    ① 對話    多輪追問三題，再交給分數最高的那一個模組。app/chat.py 的外皮。
+    ② 單次查詢 原本的表單，一句話直接判讀，可以手動指定模組。兩個分頁走的是
+              同一條 shell.analyze() —— 差別只在有沒有先追問，展示時兩邊
+              對照著看，才說得出對話層到底加了什麼。
 
 執行紀錄不是除錯工具，是展示重點 —— 放在看得見的地方，不要收在摺疊選單裡。
 
@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import tempfile
 import threading
 from pathlib import Path
 
@@ -33,6 +32,7 @@ from shared import models  # noqa: E402
 
 from app.chat import ChatSession, Phase  # noqa: E402
 from app.shell import Shell  # noqa: E402
+from app.uploads import save_upload  # noqa: E402
 
 RISK_STYLE: dict[RiskLevel, tuple[str, str]] = {
     RiskLevel.UNKNOWN: ("⚪", "尚無法判斷"),
@@ -87,12 +87,8 @@ def _selection() -> str:
 
 
 def _uploads_to_images(uploads) -> list[ImageInput]:
-    images: list[ImageInput] = []
-    for up in uploads or []:
-        tmp = Path(tempfile.gettempdir()) / up.name
-        tmp.write_bytes(up.getvalue())
-        images.append(ImageInput(path=str(tmp), filename=up.name))
-    return images
+    # 存檔用內容雜湊當檔名 —— 同名的不同截圖才不會互相覆蓋（理由見 app/uploads.py）
+    return [save_upload(up.name, up.getvalue()) for up in uploads or []]
 
 
 def _render_trace(trace, scores, *, key: str) -> None:
@@ -148,7 +144,7 @@ def _chat_tab(shell: Shell) -> None:
             disabled=chat.phase is Phase.DONE or not chat.utterances,
             help="不想再回答了也沒關係，用目前講的內容就判讀",
         ):
-            with st.spinner("讓所有相關的模組都跑一遍…"):
+            with st.spinner("交給最有把握的那個模組判讀…"):
                 chat.finish()
             st.rerun()
         if controls[1].button("重新開始"):
@@ -175,13 +171,9 @@ def _chat_tab(shell: Shell) -> None:
             st.markdown("#### 每問一題，分數怎麼變")
             st.caption("對話層的價值就在這張圖：第一句話幾乎不可能讓任何模組認領。")
             st.line_chart(chat.score_history)
-        if chat.responses:
-            # 數的是被喚起的模組，不是出得了判讀的 —— 未解鎖那個也跑過解鎖層，
-            # 它的 trace 一樣要看得到（那正是規則一在畫面上的證據）。
-            awakened = [r for r in chat.responses if r.coverage is not CoverageStatus.UNCOVERED]
-            st.markdown(f"#### 喚起了 {len(awakened)} 個模組")
-            for response in chat.responses:
-                _render_trace(response.trace, response.scores, key=f"chat-{id(response)}")
+        if chat.response is not None:
+            st.markdown("#### 最後送去判讀的那一次")
+            _render_trace(chat.response.trace, chat.response.scores, key="chat")
 
 
 # ══════════════════════════════════════════════════════════════

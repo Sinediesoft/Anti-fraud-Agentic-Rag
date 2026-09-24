@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="632" viewBox="0 0 680 632" role="img">
+<title>模組內部的判讀流程，以 A、C 為例（現況，2026-09-24）</title>
+<desc>一次 analyze() 依序經過截圖理解、合併輸入、去識別化、分類與階段、檢索、生成、合成判讀，並標出尚未實作與需要注意的部分。</desc>
+<style>
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+.bg{fill:#FFFFFF}
+.th{font-size:14px;font-weight:500;fill:#2C2C2A}
+.ts{font-size:12px;fill:#5F5E5A}
+.box{fill:#FFFFFF;stroke:#B4B2A9;stroke-width:0.8}
+.dash{stroke-dasharray:4 3}
+.arr{fill:none;stroke:#888780;stroke-width:1.5}
+.head{fill:none;stroke:#888780}
+.leader{fill:none;stroke:#B4B2A9;stroke-width:0.8;stroke-dasharray:3 3}
+.c-teal>rect,rect.c-teal{fill:#E1F5EE;stroke:#0F6E56;stroke-width:0.8}
+.c-teal>.th{fill:#085041}
+.c-teal>.ts{fill:#0F6E56}
+@media (prefers-color-scheme:dark){
+.bg{fill:#1C1C1B}
+.th{fill:#F1EFE8}
+.ts{fill:#B4B2A9}
+.box{fill:#1C1C1B;stroke:#888780}
+.arr,.head{stroke:#B4B2A9}
+.leader{stroke:#888780}
+.c-teal>rect,rect.c-teal{fill:#085041;stroke:#5DCAA5}
+.c-teal>.th{fill:#9FE1CB}
+.c-teal>.ts{fill:#5DCAA5}
+}
+</style>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head" d="M2 1L8 5L2 9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect class="bg" width="680" height="632" rx="12"/>
+<g><rect class="box" x="48" y="40" width="300" height="56" rx="8"/><text class="th" x="198" y="58" text-anchor="middle" dominant-baseline="central">截圖理解 m2</text><text class="ts" x="198" y="80" text-anchor="middle" dominant-baseline="central">A 用 PP-OCRv6 small 讀出截圖上的字</text></g>
+<line x1="348" y1="68" x2="392" y2="68" class="leader"/>
+<g><rect class="box dash" x="392" y="40" width="240" height="56" rx="8"/><text class="th" x="512" y="58" text-anchor="middle" dominant-baseline="central">C、E 還是空殼</text><text class="ts" x="512" y="80" text-anchor="middle" dominant-baseline="central">A 沒裝 ocr 那組套件時只看打字</text></g>
+<line x1="198" y1="96" x2="198" y2="112" class="arr" marker-end="url(#arrow)"/>
+<g><rect class="box" x="48" y="120" width="300" height="56" rx="8"/><text class="th" x="198" y="138" text-anchor="middle" dominant-baseline="central">合併輸入</text><text class="ts" x="198" y="160" text-anchor="middle" dominant-baseline="central">打字＋截圖上的文字</text></g>
+<line x1="198" y1="176" x2="198" y2="192" class="arr" marker-end="url(#arrow)"/>
+<g><rect class="box" x="48" y="200" width="300" height="56" rx="8"/><text class="th" x="198" y="218" text-anchor="middle" dominant-baseline="central">去識別化 deid.mask()</text><text class="ts" x="198" y="240" text-anchor="middle" dominant-baseline="central">遮掉姓名、電話、帳號等</text></g>
+<line x1="348" y1="228" x2="392" y2="228" class="leader"/>
+<g><rect class="box" x="392" y="200" width="240" height="56" rx="8"/><text class="th" x="512" y="218" text-anchor="middle" dominant-baseline="central">m4、m3 吃的是未遮蔽原文</text><text class="ts" x="512" y="240" text-anchor="middle" dominant-baseline="central">遮蔽版只餵給 C 的生成</text></g>
+<line x1="198" y1="256" x2="198" y2="272" class="arr" marker-end="url(#arrow)"/>
+<g><rect class="box" x="48" y="280" width="300" height="56" rx="8"/><text class="th" x="198" y="298" text-anchor="middle" dominant-baseline="central">分類與判斷階段 m4</text><text class="ts" x="198" y="320" text-anchor="middle" dominant-baseline="central">關鍵字打分，線索詞判階段</text></g>
+<line x1="348" y1="308" x2="392" y2="308" class="leader"/>
+<g><rect class="box dash" x="392" y="280" width="240" height="56" rx="8"/><text class="th" x="512" y="298" text-anchor="middle" dominant-baseline="central">小模型 prompt 還沒寫</text><text class="ts" x="512" y="320" text-anchor="middle" dominant-baseline="central">現在全用規則，信心標「低」</text></g>
+<line x1="198" y1="336" x2="198" y2="352" class="arr" marker-end="url(#arrow)"/>
+<g class="c-teal"><rect x="48" y="360" width="300" height="56" rx="8"/><text class="th" x="198" y="378" text-anchor="middle" dominant-baseline="central">檢索相似案例 m3</text><text class="ts" x="198" y="400" text-anchor="middle" dominant-baseline="central">bge-m3 向量相似度，取前 5 筆</text></g>
+<line x1="348" y1="388" x2="392" y2="388" class="leader"/>
+<g><rect class="box dash" x="392" y="360" width="240" height="56" rx="8"/><text class="th" x="512" y="378" text-anchor="middle" dominant-baseline="central">BM25、RRF、重排序</text><text class="ts" x="512" y="400" text-anchor="middle" dominant-baseline="central">都還沒接進查詢（E 用字元比對）</text></g>
+<line x1="198" y1="416" x2="198" y2="432" class="arr" marker-end="url(#arrow)"/>
+<g class="c-teal"><rect x="48" y="440" width="300" height="56" rx="8"/><text class="th" x="198" y="458" text-anchor="middle" dominant-baseline="central">生成白話說明（只有 C）</text><text class="ts" x="198" y="480" text-anchor="middle" dominant-baseline="central">qwen2.5:3b 讀遮蔽文字＋前 3 筆</text></g>
+<line x1="348" y1="468" x2="392" y2="468" class="leader"/>
+<g><rect class="box" x="392" y="440" width="240" height="56" rx="8"/><text class="th" x="512" y="458" text-anchor="middle" dominant-baseline="central">A、E 沒有這一步</text><text class="ts" x="512" y="480" text-anchor="middle" dominant-baseline="central">C 失敗時退回劇本文字</text></g>
+<line x1="198" y1="496" x2="198" y2="512" class="arr" marker-end="url(#arrow)"/>
+<g><rect class="box" x="48" y="520" width="300" height="56" rx="8"/><text class="th" x="198" y="538" text-anchor="middle" dominant-baseline="central">合成判讀 m5</text><text class="ts" x="198" y="560" text-anchor="middle" dominant-baseline="central">劇本階段→行動，附相似案例</text></g>
+<rect x="48" y="600" width="12" height="12" rx="2" class="c-teal"/><text class="ts" x="66" y="606" dominant-baseline="central">RAG 的檢索與生成</text>
+<rect x="197" y="600" width="12" height="12" rx="2" class="box dash"/><text class="ts" x="215" y="606" dominant-baseline="central">尚未實作</text>
+<rect x="291" y="600" width="12" height="12" rx="2" class="box"/><text class="ts" x="309" y="606" dominant-baseline="central">其他步驟</text>
+</svg>
