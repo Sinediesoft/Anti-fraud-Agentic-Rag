@@ -92,7 +92,7 @@ stages:
         why: 這會讓你同時涉及另一個法律問題，主動說明比被查到好。
 
   - id: drained
-    name: 資金已遭轉出
+    name: 帳戶遭盜用
     risk: critical
     explanation: >-
       帳戶已經發生非自願的資金異動。現在每一分鐘都影響能不能攔下還沒被提走的錢。
@@ -101,7 +101,7 @@ stages:
       - text: 現在就打銀行客服辦理圈存與停卡，號碼用卡片背面或官網的。
         urgency: now
         why: 圈存越早越有機會攔下還沒被提走的錢。
-      - text: 打 165，說明資金已遭轉出。
+      - text: 打 165，說明帳戶遭盜用。
         urgency: now
       - text: 帶對話紀錄、匯款單據到警察局報案，取得受理案件證明。
         urgency: today

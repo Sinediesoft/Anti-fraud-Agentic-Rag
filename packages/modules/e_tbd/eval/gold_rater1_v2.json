@@ -1,0 +1,245 @@
+{
+  "rater": "rater1_v2",
+  "labels": [
+    {
+      "case_id": "161315343959068698",
+      "stage": "drained"
+    },
+    {
+      "case_id": "211330216679706633",
+      "stage": "paid"
+    },
+    {
+      "case_id": "287861230838747138",
+      "stage": "paid"
+    },
+    {
+      "case_id": "199369142984249366",
+      "stage": "paid"
+    },
+    {
+      "case_id": "270443111899992071",
+      "stage": "drained"
+    },
+    {
+      "case_id": "265415225862262785",
+      "stage": "drained"
+    },
+    {
+      "case_id": "274010116364177416",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "300556224804425740",
+      "stage": "drained"
+    },
+    {
+      "case_id": "208471448669392916",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "271888317455274008",
+      "stage": "drained"
+    },
+    {
+      "case_id": "325474570574237722",
+      "stage": "drained"
+    },
+    {
+      "case_id": "288259722820194311",
+      "stage": "drained"
+    },
+    {
+      "case_id": "259599061403832347",
+      "stage": "paid"
+    },
+    {
+      "case_id": "262845390741573640",
+      "stage": "paid"
+    },
+    {
+      "case_id": "234169994303246348",
+      "stage": "none"
+    },
+    {
+      "case_id": "150132917496975377",
+      "stage": "drained"
+    },
+    {
+      "case_id": "226180394871951360",
+      "stage": "none"
+    },
+    {
+      "case_id": "203707316481036297",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "257351300600041494",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "186390790782586941",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "290731399189631022",
+      "stage": "drained"
+    },
+    {
+      "case_id": "356717661746368537",
+      "stage": "paid"
+    },
+    {
+      "case_id": "217151199776870402",
+      "stage": "paid"
+    },
+    {
+      "case_id": "256695151278166029",
+      "stage": "paid"
+    },
+    {
+      "case_id": "241402169956241420",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "155543060539772956",
+      "stage": "paid"
+    },
+    {
+      "case_id": "173372076743200768",
+      "stage": "paid"
+    },
+    {
+      "case_id": "221878729226326069",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "251193332812746772",
+      "stage": "none"
+    },
+    {
+      "case_id": "215731921773137961",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "213207816083607554",
+      "stage": "paid"
+    },
+    {
+      "case_id": "330254740036259862",
+      "stage": "drained"
+    },
+    {
+      "case_id": "272612758757838854",
+      "stage": "drained"
+    },
+    {
+      "case_id": "244343606985363474",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "222236090059198483",
+      "stage": "drained"
+    },
+    {
+      "case_id": "216751906670776320",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "279519849527382024",
+      "stage": "paid"
+    },
+    {
+      "case_id": "318413679261388807",
+      "stage": "paid"
+    },
+    {
+      "case_id": "237399474341679108",
+      "stage": "drained"
+    },
+    {
+      "case_id": "219299863337111620",
+      "stage": "drained"
+    },
+    {
+      "case_id": "307503564144513070",
+      "stage": "none"
+    },
+    {
+      "case_id": "196454993933373471",
+      "stage": "paid"
+    },
+    {
+      "case_id": "251597221911334917",
+      "stage": "paid"
+    },
+    {
+      "case_id": "195443581228421121",
+      "stage": "drained"
+    },
+    {
+      "case_id": "254524157683830824",
+      "stage": "drained"
+    },
+    {
+      "case_id": "305228019356667915",
+      "stage": "drained"
+    },
+    {
+      "case_id": "251560424091160576",
+      "stage": "drained"
+    },
+    {
+      "case_id": "272267197588443145",
+      "stage": "drained"
+    },
+    {
+      "case_id": "260282876354891811",
+      "stage": "drained"
+    },
+    {
+      "case_id": "296907000883712034",
+      "stage": "drained"
+    },
+    {
+      "case_id": "232334705196797958",
+      "stage": "drained"
+    },
+    {
+      "case_id": "249093010241884161",
+      "stage": "drained"
+    },
+    {
+      "case_id": "292964587521708055",
+      "stage": "drained"
+    },
+    {
+      "case_id": "307752771237449729",
+      "stage": "paid"
+    },
+    {
+      "case_id": "300876924874395678",
+      "stage": "drained"
+    },
+    {
+      "case_id": "200828553170784259",
+      "stage": "drained"
+    },
+    {
+      "case_id": "269311945658601477",
+      "stage": "credentials"
+    },
+    {
+      "case_id": "234563513597562925",
+      "stage": "drained"
+    },
+    {
+      "case_id": "251552042126938121",
+      "stage": "repeated"
+    },
+    {
+      "case_id": "266765971190976518",
+      "stage": "paid"
+    }
+  ]
+}

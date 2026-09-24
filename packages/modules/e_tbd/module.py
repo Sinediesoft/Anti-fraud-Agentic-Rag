@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -20,6 +21,7 @@ from contracts import (
 from shared import models
 
 from . import m1_corpus, m2_vision, m4_judgement, m5_agent
+from .m1_corpus import EXCLUDE_PATTERN
 
 MODULE_DIR = Path(__file__).resolve().parent
 
@@ -32,6 +34,8 @@ MODULE_DIR = Path(__file__).resolve().parent
 # 的區分力差三倍，平等對待會讓「只提到一個強訊號」的短查詢落榜——
 # 而真實使用者的第一句話往往就只有那一個訊號。
 DECISIVE_TERMS = (
+    # 合法交易流程裡不存在的環節。命中一個就把 can_handle 拉到門檻之上。
+    # 後三個是 2026-09-22 從 S10 gold 補的——原本漏了，導致相關案例路由不到。
     "實名認證",
     "完成實名",
     "未完成認證",
@@ -39,14 +43,26 @@ DECISIVE_TERMS = (
     "賣貨便",
     "交貨便",
     "共享畫面",
+    "分享螢幕",
+    "無卡提款",
+    "付款碼",
 )
 
 
-class JobBoardMuleModule:
-    """模組 E：求職平台 × 人頭帳戶。
+class ThreadsShoppingModule:
+    """模組 E：Threads × 網路購物詐騙。
 
-    使用者可能是在應徵工作的過程中交出帳戶的人。這一組跟另外四組的差別在於，
-    他同時是被害人，也可能成為被調查的對象——行動劇本要處理這件事。
+    題目在 2026-09-22 從「求職平台 × 人頭帳戶」改過來（見 REPORT §1），
+    class 名到 09-23 才跟著改。
+
+    這一組的主流程是「貼文 → 私訊 → 假物流連結 → 實名認證話術 → 假客服」，
+    9,167 筆語料中 47.5% 出現假物流連結、39.5% 出現實名認證話術。
+    跟另外四組的差別有兩點：
+
+    1. **57.2% 的案例會導流到 LINE**，但起點仍在 Threads（99.5% 的案例
+       Threads 出現在其他平台之前），所以整條算這個模組的。
+    2. 少數案例會走到寄出提款卡——那時使用者同時是被害人，也可能被列為
+       警示戶甚至被調查，行動劇本的 credentials 那一級要處理這件事。
     """
 
     def __init__(self) -> None:
@@ -75,14 +91,35 @@ class JobBoardMuleModule:
             positive=list(self.pack.route_terms) + list(self.pack.labels_canon),
             negative=list(self.pack.negative_terms),
         )
-        # 決定性訊號命中一個就拉到門檻之上，但**不蓋過負面詞的扣分**：
-        # 講「應徵工作對方要我實名認證」的人是隔壁模組的案子，不該被搶走。
-        if score > 0 or not any(t in text for t in self.pack.negative_terms):
-            if any(t in text for t in DECISIVE_TERMS):
-                score = max(score, 0.60)
+        # 模組界線：超商物流歸 D。命中就壓到門檻之下，但不歸零——
+        # 說明書 S7 的路由允許多模組同時命中，壓到 hint 區間讓外殼仍能提示
+        # 「你可能同時也遇到這個」，而完整判讀交給 D。
+        #
+        # 這裡跟 m1_corpus 用同一個 EXCLUDE_PATTERN：語料排除什麼，路由就排除什麼。
+        # 兩邊不一致的話，模組會認領自己語料裡根本沒有的案子。
+        if re.search(EXCLUDE_PATTERN, text):
+            return min(score, self.pack.thresholds.route_hint_min)
+
         platform_hit = any(t and t in text for t in self.pack.platform_terms)
-        # 平台對得上才加分 —— 這是「平台 × 手法」這個分法在路由上的具體表現
-        return min(1.0, score + (0.15 if platform_hit else 0.0))
+        # 決定性訊號命中一個就拉到門檻之上，但有兩個前提：
+        #
+        # 一、不蓋過負面詞的扣分——講「應徵工作對方要我實名認證」的人是隔壁模組的案子。
+        # 二、**平台要對得上**。「賣貨便 + 實名認證」在 FB 購物詐騙一模一樣成立，
+        #     那是全語料最大的組合（27,414 筆）。少了這個條件，2026-09-22 實測
+        #     非 Threads 案例的誤認領率是 30%。自己的語料本來就是用平台詞篩出來的，
+        #     所以加這個條件不會傷到認領率。
+        if score > 0 or not any(t in text for t in self.pack.negative_terms):
+            if platform_hit and any(t in text for t in DECISIVE_TERMS):
+                score = max(score, 0.60)
+        if not platform_hit:
+            # 平台是**必要條件**不只是加分。這個模組的定義就是「Threads × 網購」，
+            # 手法訊號（賣貨便、實名認證、客服…）在 FB 購物詐騙一模一樣成立，
+            # 光靠它們分不出平台。2026-09-22 實測：只加分不設門檻時，
+            # 非 Threads 案例的誤認領率 29%；改成必要條件後見下方數字。
+            # 使用者若沒提平台，由外殼的平台選單處理，不該由模組猜。
+            return min(score, 0.30)
+        # 平台對得上再加分 —— 這是「平台 × 手法」這個分法在路由上的具體表現
+        return min(1.0, score + 0.15)
 
     # ── 進入點 2 ────────────────────────────────────────────
     def analyze(self, payload: AnalyzeInput) -> Verdict:
@@ -145,6 +182,6 @@ class JobBoardMuleModule:
         )
 
 
-def build_module() -> JobBoardMuleModule:
+def build_module() -> ThreadsShoppingModule:
     """外殼靠這個工廠函式拿到實例。函式名稱不能改（contracts.ENTRYPOINT_FACTORY）。"""
-    return JobBoardMuleModule()
+    return ThreadsShoppingModule()
