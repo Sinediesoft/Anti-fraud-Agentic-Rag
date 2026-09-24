@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -98,27 +97,19 @@ OTHER_PLATFORM_TERMS = (
     "賣貨便",  # D／E 都沾得到，但都不是 A 的
 )
 
-# 平台詞的比對：英文詞要卡字界，中文詞直接比子字串。
-#
-# 「line」是子字串，online / Online / ONLINE 都含有它。2026-09-21 掃全部
-# 194,355 筆共用語料：有 389 筆含這類英文字，其中 138 筆完全沒提到真的
-# LINE 卻會被判成「平台對得上」。改成不分大小寫比對也救不了這個 —— 那是
-# 兩件事（大小寫的部分改用詞表列舉處理，見 pack.yaml 的 platform_terms）。
-#
-# 只對純 ASCII 的詞卡字界：中文沒有 a-z 的字界概念，「加賴」照原樣比。
-_ASCII = re.compile(r"^[A-Za-z]+$")
 
-
+# 平台詞的比對整支交給 m1_corpus.matches_platform() —— 切語料與路由判定
+# 從此是同一套規則。
+#
+# 2026-09-24 之前這裡自己寫了一份（英文詞卡字界、中文詞比子字串），而切語料
+# 那邊是純子字串比對。同一份語料因此有 23 筆會被自己的模組判成「沒提到平台」：
+# 13 筆是 online 誤中、8 筆是 LINEID、1 筆 OLINE、1 筆大小寫混寫。
+#
+# 兩套定義在全量 194,355 筆上差 270 筆：約 160 筆是 online／deadline／celine
+# 這類該排除的，另約 88 筆是 LINEID／LINEPAY／OLINE 這類該留的。卡字界修掉
+# 前者卻誤殺後者，所以規則收斂成一份，連同黏字表與量測數字寫在 m1_corpus。
 def _platform_hit(terms: Iterable[str], text: str) -> bool:
-    for term in terms:
-        if not term:
-            continue
-        if _ASCII.match(term):
-            if re.search(rf"(?<![A-Za-z]){re.escape(term)}(?![A-Za-z])", text):
-                return True
-        elif term in text:
-            return True
-    return False
+    return m1_corpus.matches_platform(text, list(terms))
 
 
 def _platform_factor(terms: Iterable[str], text: str) -> float:

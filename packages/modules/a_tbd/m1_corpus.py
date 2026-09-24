@@ -61,6 +61,9 @@ def load_local() -> list[Case]:
     # splitlines() 數出 17,766 行、split("\n") 數出 17,764 行，
     # make index 直接掛在 health()。抽樣的 1,000 筆裡沒有，所以之前看不到。
     #
+    # 2026-09-24 語料改成 81,423 筆之後是 5 個：splitlines() 數出 81,428 行。
+    # 語料愈大這個坑愈深，但發生率不變 —— 靠抽樣永遠測不到它。
+    #
     # 模組 C 在 b6387a8 就踩過同一個坑並記了下來（10,051 筆裡有 2 個），
     # 但那是他的資料夾，這邊沒跟著改。受害者的自由敘述什麼字元都有，
     # 用自己造的測試資料永遠碰不到這個。
@@ -87,21 +90,83 @@ def norm_label(s: str) -> str:
     return re.sub(r"[\s\u3000]+", "", s).replace("（", "(").replace("）", ")")
 
 
+# 黏在 LINE 前後、但講的確實是 LINE 的寫法。
+#
+# 2026-09-24 在全量語料上把「前後黏著英文字母的 line」掃過一遍：113 種變體，
+# 其中 42 種會單獨決定一筆案件收不收（那些案件整篇沒有獨立的 line），
+# 14 種要讀上下文才判得出來，逐筆讀完才列出下面這張表。
+#
+#   · 官方服務名：LINE ID 197／LINE Pay 35／LINE Bank 7／line.me 5／LINE QR 9
+#   · 去識別化黏住：165 把姓名遮成半形 O，「我加她的助理許美OLINE聯繫方式」
+#     就黏成 OLINE，「假買家LINEO宜（紫音媽咪）」同理 —— 只卡字界會誤殺這些
+#   · 打字黏住：lLINE（「通訊軟體lLINE」）、LINEINE、PChomeLINE、usascLINE、
+#     LINEOAD（LINE OA）、LINEHD（「LINEHD 共享資源群組」）
+#
+# 刻意不收的：online 361、celine 31、deadline 16、shopline 6、cityline 5、
+# linear 8、skyline 3、lineup 1（服飾品牌官網）、linex 1（網址路徑 linex.html）、
+# OMLINE 1（「星城OMLINE」是 Online 的錯字）。
+#
+# 這張表綁在這一份語料快照上。重抓語料要重掃一次 —— 受害者自由敘述裡的錯字
+# 與遮罩形態沒辦法預先窮舉，用自己造的測試資料也碰不到。
+LINE_GLUED = frozenset(
+    {
+        "lineid",
+        "linepay",
+        "linebank",
+        "lineqrcode",
+        "lineqr",
+        "lineme",
+        "lineine",
+        "lline",
+        "usascline",
+        "lineoad",
+        "pchomeline",
+        "lineo",
+        "oline",
+        "linehd",
+    }
+)
+_ASCII_TERM = re.compile(r"^[A-Za-z]+$")
+_GLUED_SCAN = re.compile(r"[A-Za-z]*line[A-Za-z]*", re.I)
+
+
 def matches_platform(text: str, platform_terms: list[str]) -> bool:
     """平台是從內文推斷的 —— 165 沒有平台欄位。
 
-    關鍵詞一律不分大小寫比對：實測 LINE / Line / line 三種寫法都有人用，
-    只認大寫會漏掉 7,182 筆。
+    純 ASCII 的詞卡英文字界、不分大小寫：實測 LINE / Line / line 三種寫法都
+    有人用（全量 74,282／5,078／5,547 筆），只認大寫會漏掉九成。中文詞（加賴）
+    照原樣比子字串。黏在別的字母裡的 line 預設不算，LINE_GLUED 那張表例外。
+
+    2026-09-24 改的。原本是 `term.lower() in text.lower()` 的純子字串比對，
+    在全量語料上會把 online／deadline／celine 一起收進來（182 筆）；但單純
+    改成卡字界又會誤殺 LINEID／OLINE 這類真的案子（88 筆）。兩邊都要修，
+    所以才有上面那張表。module.py 的 _platform_hit() 直接呼叫這支，兩邊
+    不再各寫一套 —— 那正是這次要收掉的問題。
     """
-    lo = text.lower()
-    return any(term.lower() in lo for term in platform_terms)
+    for term in platform_terms:
+        if not term:
+            continue
+        if _ASCII_TERM.match(term):
+            if re.search(rf"(?<![A-Za-z]){re.escape(term)}(?![A-Za-z])", text, re.I):
+                return True
+        elif term in text:
+            return True
+    # 黏字表只在平台真的是 LINE 時才有意義（別人的平台詞也走這支）
+    if not any(t.lower() == "line" for t in platform_terms if t):
+        return False
+    return any(m.group(0).lower() in LINE_GLUED for m in _GLUED_SCAN.finditer(text))
 
 
-def build_subset(labels: list[str], platform_terms: list[str], *, limit: int = 0) -> int:
+def build_subset(labels: list[str] | None, platform_terms: list[str], *, limit: int = 0) -> int:
     """從共用語料切出自己的那一份，寫進 data/cases.jsonl。
 
-    兩道篩選：標籤要在 labels 裡（正規化後比對），內文要命中平台關鍵詞。
-    limit > 0 時只取前幾筆 —— 建索引很貴，展示用抽樣就夠。
+    一道必篩：內文要命中平台關鍵詞。labels 傳 None 就只篩平台，傳清單則
+    另外要求標籤在裡面（正規化後比對）。limit > 0 時只取前幾筆。
+
+    2026-09-24：A 改成 labels=None —— 語料是「165 全量裡提得到 LINE 的」
+    81,423 筆，不再交集假投資系列標籤（原本 17,764 筆）。標籤篩選的程式碼
+    留著是因為 pack.yaml 的 labels_canon 仍然在用（can_handle 的手法詞、
+    m3_retrieval 的第一道門檻），只是不再拿來切語料。
 
     TODO(S9)：接上 CKIP 斷詞、把清理規則寫完整。目前沒有做斷詞，
     tokens 留空，檢索靠嵌入模型自己處理。
@@ -114,12 +179,12 @@ def build_subset(labels: list[str], platform_terms: list[str], *, limit: int = 0
 
     import pyarrow.parquet as pq
 
-    wanted = {norm_label(x) for x in labels}
+    wanted = {norm_label(x) for x in labels} if labels else None
     rows = pq.read_table(SHARED_CORPUS).to_pylist()
 
     kept: list[dict] = []
     for r in rows:
-        if norm_label(r.get("label", "")) not in wanted:
+        if wanted is not None and norm_label(r.get("label", "")) not in wanted:
             continue
         text = r.get("text", "") or ""
         if not matches_platform(text, platform_terms):
@@ -150,3 +215,15 @@ def stats(cases: list[Case]) -> dict[str, int]:
         "labels": len({c.label for c in cases if c.label}),
         "counties": len({c.county for c in cases if c.county}),
     }
+
+
+if __name__ == "__main__":
+    # 語料不進版控，所以切語料這件事要能一行重跑：
+    #   uv run python -m modules.a_tbd.m1_corpus
+    # 讀 pack.yaml 的 platform_terms，寫出 data/cases.jsonl。
+    import yaml
+
+    pack = yaml.safe_load((MODULE_DIR / "pack.yaml").read_text(encoding="utf-8"))
+    # labels 傳 None —— A 不做標籤切片，見 build_subset 的註解
+    n = build_subset(None, pack["platform_terms"])
+    print(f"切出 {n:,} 筆 → {LOCAL_CORPUS}")
