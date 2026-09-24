@@ -154,6 +154,6 @@ def test_其餘取樣參數也鎖死():
     assert models.SEED == 20260918
 
 
-def test_模型版本表有四個用途():
-    assert set(models.MODEL_LOCK) == {"slm", "embedding", "reranker", "cloud"}
+def test_模型版本表有五個用途():
+    assert set(models.MODEL_LOCK) == {"slm", "embedding", "reranker", "cloud", "ocr"}
     assert models.all_locked() is False  # S3 還沒做

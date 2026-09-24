@@ -31,6 +31,7 @@ PURPOSE_KEYS = {
     "嵌入模型": "embedding",
     "重排序模型": "reranker",
     "雲端模型": "cloud",
+    "OCR（認字）": "ocr",
 }
 
 ELLIPSIS = "…"

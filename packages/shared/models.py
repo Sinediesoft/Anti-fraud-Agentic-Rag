@@ -1,6 +1,6 @@
 """模型呼叫 —— 共用三樣之一，不准自己寫（說明書 S5 第 2 點）。
 
-三個函式：呼叫地端小模型、把文字變成向量、呼叫雲端模型。
+四個函式：呼叫地端小模型、把文字變成向量、呼叫雲端模型、把截圖上的字認出來。
 模型名稱跟隨性程度等參數寫死在這裡，外面改不了 —— 五個人必須用同一組模型，
 否則分數不能比。
 
@@ -15,12 +15,16 @@ S3 進行中：地端 SLM 與嵌入模型已鎖定（見 MODEL_LOCK），重排�
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
 import urllib.error
 import urllib.request
+from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from contracts import MaskedText
 
@@ -93,6 +97,13 @@ MODEL_LOCK: dict[str, ModelLock] = {
     "reranker": ModelLock("reranker", "TODO-S3", "", "", ""),
     # 雲端模型：選一家、一個型號、一個版本
     "cloud": ModelLock("cloud", "TODO-S3", "", "", ""),
+    # OCR：只管「認字」—— 找出截圖上的文字行，回每行的字、座標、信心分數。
+    # 版面判斷、併成氣泡、分出誰說的都跟平台有關，留在各模組的 M2。
+    # 建議 RapidOCR ＋ PP-OCRv6 small（E 的 20 張錯字率 0.019，備案 v5 mobile 0.031），
+    # 但只量過 E 的截圖 —— A、C 的量完再鎖。revision 要對應到模型檔的 SHA-256，
+    # 不是 rapidocr 的套件版本：RapidOCR 預設跑的是表現最差的 v4 mobile。
+    # 實測與鎖定清單見 docs/model-lock.md 的「OCR（S11）」一節。
+    "ocr": ModelLock("ocr", "TODO-S11", "", "", ""),
 }
 
 # 寫死的參數。要一樣的結果，所以 temperature 鎖 0
@@ -147,8 +158,9 @@ SLM_TIMEOUT_S = int(os.getenv("OLLAMA_TIMEOUT", "180"))
 def _require(purpose: str) -> ModelLock:
     lock = MODEL_LOCK[purpose]
     if not lock.is_locked:
+        step = "S11" if purpose == "ocr" else "S3"
         raise ModelNotSelectedError(
-            f"{purpose} 模型尚未鎖定。這是 S3 的工作：五人決議後填 shared/models.py "
+            f"{purpose} 模型尚未鎖定。這是 {step} 的工作：五人決議後填 shared/models.py "
             f"的 MODEL_LOCK 與 docs/model-lock.md。在那之前請走模組自己的退路。"
         )
     return lock
@@ -353,6 +365,124 @@ def call_cloud(prompt: MaskedText, *, system: str | None = None) -> str:
         raise ModelNotSelectedError("CLOUD_LLM_API_KEY 未設定。金鑰用環境變數，不要進儲存庫。")
     # TODO(S3)：接上雲端 API，並記得設用量上限
     raise ModelNotSelectedError(f"{lock.name} 的呼叫尚未實作（S3 之後補）")
+
+
+# ── OCR：把截圖上的字認出來 ────────────────────────────────────────
+#
+# 原本 OCR 在各模組的 M2 裡各選各的，2026-09-23 收進這裡，理由有三：
+#
+#   1. 同一張圖會被認很多次。每個模組的 can_handle() 都要看截圖上的字，
+#      認領的模組 analyze() 又要再看一次 —— 五個模組、兩個認領就是 7 次，
+#      而且 analyze_all() 是並行跑的。這裡以檔案內容快取，全隊只認一次。
+#   2. 引擎各選各的，shared.eval.cer() 量出來的就是五套不同的東西，分數不能互比
+#      —— 跟 embed() 要鎖同一個模型是同一件事。
+#   3. check_boundaries 擋 onnxruntime，卻放行底層就是它的 rapidocr。
+#      收進共用層之後，那些 OCR 套件就跟 torch 一樣只准這裡 import。
+#
+# 共用的只有認字。版面（聊天／貼文／商品頁）、把幾行併成一個氣泡、氣泡在左
+# 還是右，都跟平台有關，留在各模組的 M2 —— 所以這裡一定要回座標，只回一串
+# 純文字的話，模組就再也分不出誰說的。
+
+
+@dataclass(frozen=True)
+class OcrLine:
+    """截圖上的一行字。【原文】—— 截圖上有什麼個資，這裡就有什麼，要進判讀前一樣先過 deid。"""
+
+    text: str
+    bbox: tuple[int, int, int, int]  # (x0, y0, x1, y1)，原圖的像素座標，左上角是原點
+    score: float  # 引擎給的信心分數，0 到 1
+
+
+@dataclass(frozen=True)
+class OcrResult:
+    """一張截圖認出來的所有行，依引擎給的順序（大致由上而下）。
+
+    frozen 加 tuple 是刻意的：同一份結果會被快取起來、同時交給好幾個模組，
+    誰改了它，別的模組看到的就跟著變。
+    """
+
+    lines: tuple[OcrLine, ...]
+    engine: str  # 「引擎名@版本」，寫進執行紀錄才查得出這份結果是誰認的
+
+    @property
+    def plain_text(self) -> str:
+        return "\n".join(line.text for line in self.lines if line.text.strip())
+
+
+# 引擎收圖檔的 bytes，不收路徑：cv2.imread 在 Windows 上讀不了含中文的路徑，
+# 而使用者上傳的截圖檔名常常是中文。四台 Windows 會各踩一次。
+OcrEngine = Callable[[bytes], list[OcrLine]]
+
+# 鎖定的引擎名 -> 建立引擎的工廠。TODO(S11)：鎖定時在這裡接上那個引擎的
+# adapter（延遲 import，比照 _import_ml()），並把套件放進 pyproject 的 extra。
+OCR_ENGINES: dict[str, Callable[[], OcrEngine]] = {}
+
+# 快取幾張。一次對話頂多幾張截圖，32 張綽綽有餘，也不會讓原文在記憶體裡越積越多。
+OCR_CACHE_SIZE = 32
+
+# 引擎跟 _EMBEDDER 一樣，一個 process 只載一次、載了就常駐，不做閒置釋放：
+# 閒置後重載的那段時間會直接吃掉 S12 的 1 秒預算。代價是記憶體 —— 實測 RapidOCR
+# 一個 process 約 1.6 GB（原本估計幾百 MB，低估約五倍），加上 bge-m3 約 4.8 GB。
+# 8 GB 的機器放不下時，這個決定要重新評估（見 docs/model-lock.md）。
+_OCR_ENGINE: tuple = ()
+_OCR_CACHE: OrderedDict[str, OcrResult] = OrderedDict()
+
+# 認字全程上鎖，不只是載入。兩個理由：引擎不保證執行緒安全；而 analyze_all()
+# 並行時，第二條執行緒要的若是同一張圖，等一下就能拿到快取，不必再認一次。
+_OCR_LOCK = threading.Lock()
+
+
+def _load_ocr_engine(lock: ModelLock, key: str) -> OcrEngine:
+    """呼叫端要先拿到 _OCR_LOCK。"""
+    global _OCR_ENGINE
+    if _OCR_ENGINE and _OCR_ENGINE[0] == key:
+        return _OCR_ENGINE[1]
+    factory = OCR_ENGINES.get(lock.name)
+    if factory is None:
+        raise ModelNotSelectedError(
+            f"OCR 鎖定的是 {lock.name}，但 shared/models.py 的 OCR_ENGINES 還沒有它的 "
+            f"adapter（S11 之後補）。在那之前請走模組自己的退路：只看打字的內容。"
+        )
+    engine = factory()
+    _OCR_ENGINE = (key, engine)
+    return engine
+
+
+def ocr_ready() -> bool:
+    """OCR 能不能用：鎖定了，而且接上了引擎。模組的 health() 問這個。
+
+    只看鎖定表不夠 —— 鎖了但 adapter 還沒寫，照樣認不出任何字。
+    """
+    lock = MODEL_LOCK["ocr"]
+    return lock.is_locked and lock.name in OCR_ENGINES
+
+
+def ocr(path: str | os.PathLike[str]) -> OcrResult:
+    """把一張截圖上的字認出來。五個模組都從這裡拿，同一張圖只認一次。
+
+    快取的鍵是**檔案內容**的雜湊，不是路徑：app/ui.py 把上傳的圖寫到暫存資料夾
+    時用的是原始檔名，兩張不同的圖都叫 image.png 就會落在同一個路徑上 ——
+    拿路徑當鍵的話，第二張會拿到第一張的字，而且不會有任何徵兆。
+    鍵也帶上引擎版本，引擎換版時快取跟著失效。
+
+    回傳的是【原文】。截圖上的個資都還在，進判讀前照樣要過 shared.deid。
+    """
+    lock = _require("ocr")
+    data = Path(path).read_bytes()
+    engine_key = f"{lock.name}@{lock.revision}"
+    cache_key = f"{engine_key}:{hashlib.sha256(data).hexdigest()}"
+
+    with _OCR_LOCK:
+        hit = _OCR_CACHE.get(cache_key)
+        if hit is not None:
+            _OCR_CACHE.move_to_end(cache_key)
+            return hit
+        engine = _load_ocr_engine(lock, engine_key)
+        result = OcrResult(lines=tuple(engine(data)), engine=engine_key)
+        _OCR_CACHE[cache_key] = result
+        while len(_OCR_CACHE) > OCR_CACHE_SIZE:
+            _OCR_CACHE.popitem(last=False)
+        return result
 
 
 def lock_table() -> list[dict[str, str]]:

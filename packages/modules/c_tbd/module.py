@@ -100,8 +100,8 @@ class TemplateModule:
             ),
             HealthCheck(
                 name="ocr",
-                ok=m2_vision.OCR_ENGINE is not None,
-                detail="OCR 引擎尚未選定（S11），有圖時會降級成純文字",
+                ok=models.ocr_ready(),
+                detail="共用 OCR 尚未鎖定（S11），有圖時只用打字的內容",
                 required=False,
             ),
             HealthCheck(
