@@ -1,18 +1,24 @@
-"""對話層 —— 使用者輸入 → 固定追問三輪 → 喚起所有認領的模組 → 輸出。
+"""對話層 —— 使用者輸入 → 固定追問三輪 → 交給分數最高的那一個模組 → 輸出。
 
 為什麼要追問：真實使用者的第一句話幾乎都不夠。實測「我在 fb 上點了一個連結，
 連結讓我加 line」這句 —— 兩個平台名都有，但沒有任何手法詞 —— 所有模組都拿 0 分，
 結果是「尚未涵蓋」。而這正是最該介入的時刻：他還沒匯錢。
 
-同一句話逐輪補上去（2026-09-22 實測）：
+同一句話逐輪補上去（2026-09-24 重測）：
 
     turn0  原句                          a=0.000       c=0.150       尚未涵蓋
     turn1  ＋「帶我操作股票」              a=0.433 提示   c=0.483 提示   尚未涵蓋
-    turn2  ＋「老師說保證獲利」            a=0.867 認領   c=0.817 認領   兩個都喚起
-    turn3  ＋「入金五萬、出金拿不回」       a=0.929 認領   c=0.900 認領   兩個都喚起
+    turn2  ＋「老師說保證獲利」            a=0.780 認領   c=0.817 認領   交給 c，a 只提醒
+    turn3  ＋「入金五萬、出金拿不回」       a=0.867 認領   c=0.900 認領   交給 c，a 只提醒
 
-**不早停**：就算第一輪就有模組認領，三輪照問完。早停會少喚起模組 —— 第二個
-模組往往還差一個詞才過門檻，而那個詞就在第三題的答案裡。
+**只交給一個模組**（說明書 S7 路由的第二種結果）：好幾個都認領時，分數最高的
+出完整判讀，其他的只出「你可能同時也遇到」的提醒。判讀走 shell.analyze()，
+跟「單次查詢」分頁是同一條路。
+
+**不早停**：就算第一輪就有模組認領，三輪照問完。追問問的是「怎麼付的」「卡在
+哪一步」，那正是模組判斷階段要的線索 —— 各模組的 m4 在整段文字裡找階段線索詞、
+取最後出現的那一階（detect_stage()）。一認領就停，判讀會在使用者講出「已經匯了」
+之前就定案，階段會判得比實際前面。
 
 三條界線，寫死在設計裡：
 
@@ -37,6 +43,7 @@ from contracts import (
     ImageInput,
     RiskLevel,
     RoutedResponse,
+    Verdict,
 )
 
 from .router import route
@@ -62,15 +69,6 @@ RISK_LABEL: dict[RiskLevel, str] = {
     RiskLevel.HIGH: "高",
     RiskLevel.CRITICAL: "非常高",
 }
-
-# 由低到高。RiskLevel 是 StrEnum，字母序不等於嚴重度，所以順序要明寫。
-_RISK_ORDER = (
-    RiskLevel.UNKNOWN,
-    RiskLevel.LOW,
-    RiskLevel.MEDIUM,
-    RiskLevel.HIGH,
-    RiskLevel.CRITICAL,
-)
 
 # 「錢出事了」的訊號。跟 packages/modules/a_tbd/m3_retrieval.py 的那份重複是
 # 刻意的 —— 外殼不准 import 任何一個模組，否則加第六個模組就要改這裡。
@@ -233,7 +231,7 @@ class ChatSession:
     images: list[ImageInput] = field(default_factory=list)
     history: list[ChatMessage] = field(default_factory=list)
     asked: list[str] = field(default_factory=list)
-    responses: list[RoutedResponse] = field(default_factory=list)
+    response: RoutedResponse | None = None
     # 每一輪的 can_handle 分數。執行紀錄是展示重點（S7 注意事項）——
     # 「問一題分數跳多少」是這個產品最值得看的一張圖。
     score_history: list[dict[str, float]] = field(default_factory=list)
@@ -299,7 +297,7 @@ class ChatSession:
         self.images.clear()
         self.history.clear()
         self.asked.clear()
-        self.responses.clear()
+        self.response = None
         self.score_history.clear()
         self.advice_given = False
 
@@ -322,8 +320,8 @@ class ChatSession:
         # 然後照樣把剩下的輪數問完。
         out.extend(self._distress_advice())
 
-        # 不早停：就算已經有模組認領了，三題照問完。早停會少喚起模組 ——
-        # 第二個模組常常只差一個詞就過門檻，而那個詞就在後面那題的答案裡。
+        # 不早停：就算已經有模組認領了，三題照問完。後面幾題的答案（怎麼付的、
+        # 卡在哪一步）是模組判斷階段的線索，早停的話階段會判得比實際前面。
         if len(self.asked) >= self.max_questions:
             out.extend(self._decide())
             return out
@@ -399,37 +397,27 @@ class ChatSession:
     def _decide(self) -> list[ChatMessage]:
         self.phase = Phase.DONE
         payload = AnalyzeInput(text=self.text, images=self.images, session_id=self.session_id)
-        self.responses = self.shell.analyze_all(payload)
+        self.response = self.shell.analyze(payload)
         if not self.score_history:
             self.score_history.append(self._scores())
-        return self._render()
+        return self._render(self.response)
 
-    def _render(self) -> list[ChatMessage]:
+    def _render(self, response: RoutedResponse) -> list[ChatMessage]:
         """把 RoutedResponse 攤平成訊息。純樣板 —— 這裡不生成任何內容，
         所有文字都來自已經過 app.guards 檢核的 Verdict。"""
         out: list[ChatMessage] = []
-        covered = [r for r in self.responses if r.verdict is not None]
-        locked = [r for r in self.responses if r.coverage is CoverageStatus.COVERED_LOCKED]
 
-        # 風險等級取 max —— 往「多給」的方向失敗，跟解鎖規則三同一個精神
-        risk = max(
-            (r.risk_level for r in self.responses),
-            key=_RISK_ORDER.index,
-            default=RiskLevel.UNKNOWN,
-        )
-        out.append(ChatMessage("bot", f"風險等級：{RISK_LABEL[risk]}", kind="risk"))
+        out.append(ChatMessage("bot", f"風險等級：{RISK_LABEL[response.risk_level]}", kind="risk"))
         out.append(
             ChatMessage("bot", f"☎️ 反詐騙諮詢專線 {HOTLINE} —— 任何情況都可以直接打。", kind="note")
         )
 
-        for index, response in enumerate(covered):
-            out.extend(self._render_verdict(response, primary=index == 0, seen=covered[:index]))
-
-        for response in locked:
+        if response.verdict is not None:
+            out.extend(self._render_verdict(response.verdict))
+        elif response.coverage is CoverageStatus.COVERED_LOCKED:
             # 規則一：不能假裝不知道
             out.append(ChatMessage("bot", response.locked_notice, kind="locked"))
-
-        if not covered and not locked:
+        else:
             out.append(
                 ChatMessage(
                     "bot",
@@ -437,34 +425,25 @@ class ChatSession:
                     kind="say",
                 )
             )
-            advice = self.responses[0].general_advice if self.responses else GENERAL_ADVICE
-            out.extend(ChatMessage("bot", f"・{a}", kind="advice") for a in advice)
+            out.extend(ChatMessage("bot", f"・{a}", kind="advice") for a in response.general_advice)
 
-        hinted = {h.module_id: h for r in self.responses for h in r.hints}
-        for hint in hinted.values():
-            out.append(
-                ChatMessage(
-                    "bot",
-                    f"（另外你的描述有一點像「{hint.module_name}」，但我沒有把握到可以下判讀的程度。）",
-                    kind="hint",
-                )
-            )
+        for hint in response.hints:
+            if response.coverage is CoverageStatus.UNCOVERED:
+                text = f"（另外你的描述有一點像「{hint.module_name}」，但我沒有把握到可以下判讀的程度。）"
+            else:
+                # 有主判讀時，提醒裡可能有也過了門檻、只是分數沒排第一的模組 ——
+                # 不能說成「沒有把握」。用說明書 S7 的原話，跟「單次查詢」分頁一致。
+                locked = "，這個類型需要解鎖才有完整判讀" if hint.locked else ""
+                text = f"（你可能同時也遇到「{hint.module_name}」{locked}。）"
+            out.append(ChatMessage("bot", text, kind="hint"))
 
         out.append(ChatMessage("bot", DISCLAIMER, kind="note"))
         return out
 
-    def _render_verdict(
-        self, response: RoutedResponse, *, primary: bool, seen: list[RoutedResponse]
-    ) -> list[ChatMessage]:
-        verdict = response.verdict
-        assert verdict is not None
+    def _render_verdict(self, verdict: Verdict) -> list[ChatMessage]:
         out: list[ChatMessage] = []
 
-        if primary:
-            head = f"這看起來是**{verdict.scam_type}**。"
-        else:
-            # 次模組要講清楚為什麼也被喚起，否則使用者會覺得系統在亂猜
-            head = f"你的描述同時也符合**{verdict.scam_type}** —— 兩邊都要看。"
+        head = f"這看起來是**{verdict.scam_type}**。"
         if verdict.scam_stage:
             head += f"你目前走到的是：{verdict.scam_stage}。"
         out.append(ChatMessage("bot", head, kind="verdict"))
@@ -472,22 +451,9 @@ class ChatSession:
         if verdict.stage_explanation:
             out.append(ChatMessage("bot", verdict.stage_explanation, kind="verdict"))
 
-        # 次模組只列它獨有的行動 —— 兩邊都會說「打 165」，重複列會稀釋掉
-        # 真正不一樣的那幾條。
-        said = {
-            a.text.strip()
-            for previous in seen
-            if previous.verdict
-            for a in previous.verdict.actions
-        }
-        actions = [a for a in verdict.actions if a.text.strip() not in said]
-        if actions:
-            out.append(
-                ChatMessage(
-                    "bot", "接下來該做的事：" if primary else "這一類額外要做的：", kind="say"
-                )
-            )
-            for action in sorted(actions, key=lambda a: a.order):
+        if verdict.actions:
+            out.append(ChatMessage("bot", "接下來該做的事：", kind="say"))
+            for action in sorted(verdict.actions, key=lambda a: a.order):
                 mark = "🕒 " if action.preventive else ""
                 line = f"{action.order}. {mark}{action.text}"
                 if action.why:
@@ -547,14 +513,14 @@ class ChatSession:
                 )
             ]
 
-        covered = [r for r in self.responses if r.verdict is not None]
-        answers = [m for r in covered for m in self._answer(r, field_key)]
+        response = self.response
+        assert response is not None  # 走到 DONE 一定判讀過了
+        answers = self._answer(response, field_key) if response.verdict is not None else []
         if answers:
             return answers
 
-        locked = [r for r in self.responses if r.coverage is CoverageStatus.COVERED_LOCKED]
-        if locked:
-            return [ChatMessage("bot", locked[0].locked_notice, kind="locked")]
+        if response.coverage is CoverageStatus.COVERED_LOCKED:
+            return [ChatMessage("bot", response.locked_notice, kind="locked")]
         return [ChatMessage("bot", "這次的判讀裡沒有這一項。", kind="say")]
 
     def _answer(self, response: RoutedResponse, field_key: str) -> list[ChatMessage]:

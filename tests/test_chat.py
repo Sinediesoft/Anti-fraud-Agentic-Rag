@@ -41,11 +41,13 @@ class _假模組:
         self._actions = actions if actions is not None else ["立即撥打 165 並聯繫匯款銀行申請圈存"]
         self._scam_type = scam_type
         self._cases = cases or []
+        self.analyze_calls = 0
 
     def can_handle(self, payload: AnalyzeInput) -> float:
         return self._score
 
     def analyze(self, payload: AnalyzeInput) -> Verdict:
+        self.analyze_calls += 1
         return Verdict(
             module_id=self._id,
             risk_level=self._risk,
@@ -223,38 +225,35 @@ def test_判讀輸出一定帶_165_與免責聲明():
     assert "僅供參考" in _texts(out)
 
 
-def test_兩個模組都認領時兩份都出現():
-    modules = [
-        _wrap(_假模組("a", 0.9, scam_type="LINE 投資詐騙"), priority=10),
-        _wrap(_假模組("c", 0.8, scam_type="Facebook 投資詐騙"), priority=900),
-    ]
-    chat = _session(modules)
-    out = chat.finish()
-    assert len(chat.responses) == 2
-    assert "LINE 投資詐騙" in _texts(out)
-    assert "Facebook 投資詐騙" in _texts(out)
+def test_兩個模組都認領時只交給分數最高的那一個():
+    """說明書 S7 路由第二種結果：好幾個都夠高 → 分數最高的出完整判讀。"""
+    a = _假模組("a", 0.9, scam_type="LINE 投資詐騙")
+    c = _假模組("c", 0.8, scam_type="Facebook 投資詐騙")
+    out = _texts(_session([_wrap(a, priority=10), _wrap(c, priority=900)]).finish())
+    assert "LINE 投資詐騙" in out
+    assert "Facebook 投資詐騙" not in out
+    assert c.analyze_calls == 0, "沒被選中的模組不該跑判讀"
 
 
-def test_風險等級取兩份裡高的那個():
+def test_其他認領的模組只出提醒():
+    """同一條的後半句：其他的出「你可能同時也遇到這個」的提醒。"""
     modules = [
-        _wrap(_假模組("a", 0.9, risk=RiskLevel.MEDIUM), priority=10),
-        _wrap(_假模組("c", 0.8, risk=RiskLevel.CRITICAL), priority=900),
+        _wrap(_假模組("a", 0.9), priority=10),
+        _wrap(_假模組("c", 0.8), priority=900),
     ]
     out = _session(modules).finish()
-    risk = next(m for m in out if m.kind == "risk")
-    assert "非常高" in risk.text, "取 max 才是往「多給」的方向失敗"
+    assert any(m.kind == "hint" and "假模組c" in m.text for m in out)
 
 
-def test_次模組只列它獨有的行動():
-    共同 = "立即撥打 165 並聯繫匯款銀行申請圈存"
+def test_未解鎖的模組當提醒時也講明要解鎖():
+    """規則一：付費模組沒排第一、只拿到提醒，也要讓人知道解鎖後有完整判讀。"""
     modules = [
-        _wrap(_假模組("a", 0.9, actions=[共同, "在 LINE 上封存對話紀錄"]), priority=10),
-        _wrap(_假模組("c", 0.8, actions=[共同, "檢舉該 Facebook 粉專"]), priority=900),
+        _wrap(_假模組("a", 0.9), plan=Plan.FREE, priority=10),
+        _wrap(_假模組("c", 0.8), plan=Plan.PAID, priority=900),
     ]
-    out = _texts(_session(modules).finish())
-    assert out.count(共同) == 1, "兩邊都會說打 165，重複列會稀釋掉真正不一樣的那幾條"
-    assert "在 LINE 上封存對話紀錄" in out
-    assert "檢舉該 Facebook 粉專" in out
+    out = _session(modules, unlocked=False).finish()
+    hint = next(m for m in out if m.kind == "hint" and "假模組c" in m.text)
+    assert "需要解鎖" in hint.text
 
 
 def test_相似案例要帶出處():
@@ -327,7 +326,7 @@ def test_重新開始會清乾淨():
     chat.finish()
     chat.restart()
     assert chat.phase is Phase.COLLECTING
-    assert chat.asked == [] and chat.utterances == [] and chat.responses == []
+    assert chat.asked == [] and chat.utterances == [] and chat.response is None
     assert chat.advice_given is False
 
 

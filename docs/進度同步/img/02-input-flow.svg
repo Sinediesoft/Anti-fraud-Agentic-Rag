@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="616" viewBox="0 0 680 616" role="img">
-<title>使用者輸入文字後的處理流程（現況，2026-09-23）</title>
-<desc>從使用者輸入、對話層追問、路由比分、模組判讀、輸出檢核到呈現，含尚未涵蓋與未解鎖兩條分支。</desc>
+<title>使用者輸入文字後的處理流程（現況，2026-09-24）</title>
+<desc>從使用者輸入、對話層追問、路由比分、只交給分數最高的一個模組判讀、輸出檢核到呈現，含尚未涵蓋與未解鎖兩條分支。</desc>
 <style>
 text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
 .bg{fill:#FFFFFF}
@@ -43,13 +43,13 @@ text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto
 <g class="c-teal"><rect x="392" y="224" width="220" height="56" rx="8"/><text class="th" x="502" y="242" text-anchor="middle" dominant-baseline="central">沒有模組過門檻</text><text class="ts" x="502" y="264" text-anchor="middle" dominant-baseline="central">標為尚未涵蓋，給通用建議</text></g>
 <text class="ts" x="210" y="298" dominant-baseline="central">有模組認領</text>
 <line x1="198" y1="280" x2="198" y2="308" class="arr" marker-end="url(#arrow)"/>
-<g class="c-purple"><rect x="48" y="316" width="300" height="56" rx="8"/><text class="th" x="198" y="334" text-anchor="middle" dominant-baseline="central">認領的模組各自判讀</text><text class="ts" x="198" y="356" text-anchor="middle" dominant-baseline="central">同時跑，每個先過解鎖檢查</text></g>
+<g class="c-purple"><rect x="48" y="316" width="300" height="56" rx="8"/><text class="th" x="198" y="334" text-anchor="middle" dominant-baseline="central">分數最高的那個模組判讀</text><text class="ts" x="198" y="356" text-anchor="middle" dominant-baseline="central">其他認領的只給提醒；先過解鎖檢查</text></g>
 <line x1="348" y1="344" x2="384" y2="344" class="arr" marker-end="url(#arrow)"/>
 <g class="c-teal"><rect x="392" y="316" width="220" height="56" rx="8"/><text class="th" x="502" y="334" text-anchor="middle" dominant-baseline="central">模組未解鎖</text><text class="ts" x="502" y="356" text-anchor="middle" dominant-baseline="central">只說類型；風險與 165 照給</text></g>
 <line x1="198" y1="372" x2="198" y2="400" class="arr" marker-end="url(#arrow)"/>
 <g class="c-teal"><rect x="48" y="408" width="300" height="56" rx="8"/><text class="th" x="198" y="426" text-anchor="middle" dominant-baseline="central">輸出檢核 guards</text><text class="ts" x="198" y="448" text-anchor="middle" dominant-baseline="central">高風險沒行動就改給通用建議</text></g>
 <line x1="198" y1="464" x2="198" y2="492" class="arr" marker-end="url(#arrow)"/>
-<g><rect class="box" x="48" y="500" width="300" height="56" rx="8"/><text class="th" x="198" y="518" text-anchor="middle" dominant-baseline="central">呈現給使用者</text><text class="ts" x="198" y="540" text-anchor="middle" dominant-baseline="central">風險取最高、判讀並排、附免責聲明</text></g>
+<g><rect class="box" x="48" y="500" width="300" height="56" rx="8"/><text class="th" x="198" y="518" text-anchor="middle" dominant-baseline="central">呈現給使用者</text><text class="ts" x="198" y="540" text-anchor="middle" dominant-baseline="central">一份判讀、其他模組列成提醒、附免責聲明</text></g>
 <path d="M502 372 L502 512 L356 512" class="arr" marker-end="url(#arrow)"/>
 <path d="M612 252 L632 252 L632 530 L356 530" class="arr" marker-end="url(#arrow)"/>
 <rect x="48" y="584" width="12" height="12" rx="2" class="c-teal"/><text class="ts" x="66" y="590" dominant-baseline="central">外殼（app/）</text>
