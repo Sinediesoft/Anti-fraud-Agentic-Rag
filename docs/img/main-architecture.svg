@@ -353,13 +353,13 @@ text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto
 <rect class="cell" x="160.0" y="1739.0" width="169.3" height="137.0" rx="6"/>
 <text class="tc" x="168.0" y="1755.0" dominant-baseline="central">先過關鍵字門檻，</text>
 <text class="tc" x="168.0" y="1771.0" dominant-baseline="central">bge-m3 編碼問句，</text>
-<text class="tc" x="168.0" y="1787.0" dominant-baseline="central">和 17,764 筆向量算內積</text>
+<text class="tc" x="168.0" y="1787.0" dominant-baseline="central">和 81,423 筆向量算內積</text>
 <text class="tc" x="168.0" y="1803.0" dominant-baseline="central">＋手法詞加分，取前 5 筆</text>
 <g class="chip k-cpu"><rect x="168.0" y="1816.0" width="55.4" height="18" rx="9"/><text x="195.7" y="1825.0" text-anchor="middle" dominant-baseline="central">bge-m3</text></g>
 <g class="chip k-cpu"><rect x="228.4" y="1816.0" width="37.1" height="18" rx="9"/><text x="246.9" y="1825.0" text-anchor="middle" dominant-baseline="central">CPU</text></g>
 <g class="chip k-cpu"><rect x="270.5" y="1816.0" width="47.0" height="18" rx="9"/><text x="294.0" y="1825.0" text-anchor="middle" dominant-baseline="central">記憶體</text></g>
-<text class="tf" x="168.0" y="1845.5" dominant-baseline="central">索引 73 MB，每次查詢</text>
-<text class="tf" x="168.0" y="1860.5" dominant-baseline="central">從磁碟讀進記憶體</text>
+<text class="tf" x="168.0" y="1845.5" dominant-baseline="central">索引 334 MB，載入後</text>
+<text class="tf" x="168.0" y="1860.5" dominant-baseline="central">常駐記憶體快取</text>
 <rect class="cell" x="337.3" y="1739.0" width="169.3" height="137.0" rx="6"/>
 <text class="tc" x="345.3" y="1755.0" dominant-baseline="central">bge-m3 編碼問句，</text>
 <text class="tc" x="345.3" y="1771.0" dominant-baseline="central">和 10,051 筆向量算內積，</text>
