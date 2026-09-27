@@ -26,7 +26,7 @@ from contracts import (
 )
 from shared import deid
 
-from . import m2_vision, m3_retrieval, m4_judgement
+from . import m1_corpus, m2_vision, m3_retrieval, m4_judgement
 
 _RISK_BY_NAME = {
     "low": RiskLevel.LOW,
@@ -103,7 +103,15 @@ def run(payload: AnalyzeInput, pack: Any, playbook: dict) -> Verdict:
         )
 
     def retrieve() -> None:
-        ctx.similar = m3_retrieval.search(ctx.combined_text, top_k=5)
+        # 語料自己撈、自己傳進去，不要讓 search() 在裡面再撈一次。
+        #
+        # search(cases=None) 會自己呼叫 load_local()，而這條流水線之後若再加
+        # 一個要讀語料的步驟，就會各撈各的、拿到可能不同步的兩份快照。明著
+        # 傳進去是讓「這一輪用的是哪一份語料」只有一個答案。
+        #
+        # 效能上 load_local() 已經有快取了（2026-09-24 加的），所以這一行
+        # 不是為了省那 0.25 秒 —— 那是快取的功勞，不是這裡的。
+        ctx.similar = m3_retrieval.search(ctx.combined_text, top_k=5, cases=m1_corpus.load_local())
 
     _step(ctx, "m2:截圖理解", read_images)
     _step(ctx, "multimodal:合併輸入", combine)

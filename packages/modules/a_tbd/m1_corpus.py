@@ -45,10 +45,35 @@ class Case:
     tokens: list[str] = field(default_factory=list)
 
 
+# 解析好的語料快取。鍵是（路徑, mtime, 檔案大小）—— 重切語料就自動失效。
+_CACHE: tuple[tuple[str, int, int], list[Case]] | None = None
+
+
 def load_local() -> list[Case]:
-    """讀自己切好的那一份。沒有就回空的 —— 不要在這裡爆炸。"""
+    """讀自己切好的那一份。沒有就回空的 —— 不要在這裡爆炸。
+
+    **會快取**。2026-09-24 語料從 17,764 筆擴到 81,423 筆之後，這支變成
+    每次呼叫都要重讀、重新解析 78 MB 的 JSONL：實測 0.25 秒、約 197 MB。
+    而 m3_retrieval.search() 不傳 cases 時每次查詢都會呼叫它一次 ——
+    等於單次查詢的 404 毫秒裡有 250 毫秒花在重讀自己剛剛才讀過的檔案
+    （17,764 筆時只花 0.05 秒，所以之前看不出來）。
+
+    失效方式跟 m3_retrieval 的向量庫快取一樣看檔案的 mtime 與大小，不算雜湊
+    —— 對 78 MB 算一次 sha256 要 0.05 秒，會把省下來的再吃掉一部分。代價是
+    「同一微秒內把語料換成另一份一樣大的」偵測不到；語料是手動重切出來的，
+    兩次之間差好幾秒，實務上碰不到。
+
+    回傳的 list 每次都是新的（淺複製），所以呼叫端可以自由篩選、排序而不會
+    污染快取。但 **Case 物件本身是共用的**，不要就地改它 —— 要改就自己建新的。
+    m2_vision 的 OCR 快取踩過同一個坑（見那邊的註解）。
+    """
+    global _CACHE
     if not LOCAL_CORPUS.exists():
         return []
+    stat = LOCAL_CORPUS.stat()
+    stamp = (str(LOCAL_CORPUS), stat.st_mtime_ns, stat.st_size)
+    if _CACHE is not None and _CACHE[0] == stamp:
+        return list(_CACHE[1])
     cases: list[Case] = []
     # 🔴 一定要用 split("\n")，不能用 splitlines()。
     #
@@ -81,7 +106,8 @@ def load_local() -> list[Case]:
                 county=raw.get("county", ""),
             )
         )
-    return cases
+    _CACHE = (stamp, cases)
+    return list(cases)
 
 
 def norm_label(s: str) -> str:

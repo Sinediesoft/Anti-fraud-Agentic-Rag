@@ -1225,8 +1225,8 @@ MEMORY_SVG = """
   <text class="mm-name" x="36" y="123">OCR：PP-OCRv6 small</text>
   <text class="mm-sub" x="36" y="140">第一張截圖才載入；跑久了約 1.5 GB</text>
   <rect class="mm-item mm-dash" x="22" y="158" width="416" height="44" rx="8"/>
-  <text class="mm-name" x="36" y="175">索引＋語料（A 索引 334 MB、C 64 MB）</text>
-  <text class="mm-sub" x="36" y="192">A 索引載入後常駐；語料每次查詢重讀 197 MB。C 用完就放掉</text>
+  <text class="mm-name" x="36" y="175">索引＋語料（A 約 540 MB、C 64 MB）</text>
+  <text class="mm-sub" x="36" y="192">A 索引 334＋語料 197 MB，載入後都常駐；C 用完就放掉</text>
   <line class="mm-arrow" x1="230" y1="218" x2="230" y2="272" marker-end="url(#mm-arrow)"/>
   <text class="mm-sub" x="244" y="240">call_slm() 經 HTTP</text>
   <text class="mm-code" x="244" y="257">127.0.0.1:11434</text>
