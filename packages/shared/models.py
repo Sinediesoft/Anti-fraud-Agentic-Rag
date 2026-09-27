@@ -113,11 +113,6 @@ SEED = 20260918
 #
 # 呼叫 SLM 時一定要明確帶上，不要靠預設值 —— 五個人用不同的值會在不同的點
 # 被截斷，輸出就不能互比。截斷的可觀測訊號見 tools/bench/slm_truncation.py。
-#
-# ⚠ 越線的代價不是「切掉超出的那幾個」：2026-09-27 實測，同一個 1,049 token 的
-#   prompt 在 num_ctx=1024 下只吃進 514、512 下只吃進 258、256 下只吃進 130 ——
-#   一超過就砍到只剩上限的一半。所以 8192 的意思是「8192 以內安全」，不是
-#   「有 8192 可以花」，而且它不會報錯。偵測方式見 Usage.truncated。
 NUM_CTX = 8192
 
 # ── 嵌入模型的執行條件 ──────────────────────────────────────────────
@@ -138,10 +133,6 @@ EMBED_BATCH = 8
 # 這一行要跟著 MODEL_LOCK["embedding"] 一起改。
 EMBED_POOLING = "cls"
 
-# 估算用的字/token 比例（實測見 estimate_embed_tokens）。精確值請用
-# count_embed_tokens() —— tokenizer 已經載入時它才是對的那一個。
-EMBED_CHARS_PER_TOKEN = 1.27
-
 # ── 地端 SLM 的連線設定 ────────────────────────────────────────────
 #
 # 走 Ollama 的 HTTP API，用標準函式庫的 urllib —— 不為了這件事多一個相依。
@@ -151,170 +142,6 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 # timeout 也走環境變數：位址既然能指到別台機器，延遲就不會跟本機一樣。
 # 預設 180 是本機實測 —— 冷啟動 9.2 秒，長輸出會更久；寧可等也不要半路砍掉。
 SLM_TIMEOUT_S = int(os.getenv("OLLAMA_TIMEOUT", "180"))
-
-# ── token 記帳（2026-09-27 加）──────────────────────────────────────
-#
-# 為什麼記帳的程式碼非得寫在這一層：Ollama 的回傳裡本來就帶著
-# prompt_eval_count 與 eval_count，而 call_slm() 以前只取 "response" 就把整包
-# 丟掉了。外殼看不到 HTTP 回傳，模組拿到的是一個字串 —— 真實的 token 數只有
-# 這裡摸得到。嵌入那邊同理：tokenizer 切完幾個 token 只有 embed() 知道。
-#
-# 這一段**只記帳**。取樣參數、num_ctx、截斷行為一個都沒動 —— 加的是觀測，
-# 不是行為，所以它不算「改凍結的共用層功能」。
-#
-# 一個 token 大概幾個字（2026-09-27 在 A 的機器上拿 qwen2.5:3b 實測）：
-#
-#     真實繁中敘述  47 字 →  62 token      86 字 → 93 token     54 字 → 66 token
-#     扣掉樣板之後一律落在 1.27～1.32 字/token
-#
-# 樣板開銷是固定的 25 token 左右（/api/generate 會套 qwen 的對話樣板：
-# 1 個字的 prompt 也會回 30 token，空字串回 0）。所以估算式是
-# 「25 ＋ 字數 ÷ 1.27」—— 對 40 字以上的真實敘述誤差在幾個百分點內，
-# 但混到英文、數字與標點就會高估（真實的 C 生成 prompt 490 字 → 實際 364
-# token，估出來 411，高估一成）。估算只用在「還沒送出去」的那一刻，
-# 送出去之後畫面上一律換成 Ollama 回的真實數字。
-SLM_CHARS_PER_TOKEN = 1.27
-SLM_TEMPLATE_TOKENS = 25
-
-# 記幾筆就好。建索引會把 embed() 呼叫上萬次，記帳不能跟著無上限地長。
-USAGE_LOG_MAX = 64
-
-
-@dataclass(frozen=True)
-class Usage:
-    """一次模型呼叫吃掉多少 token。
-
-    purpose 跟 MODEL_LOCK 的鍵一致（slm / embedding），畫面上才分得出這筆是
-    檢索還是生成。limit 存的是「這次呼叫真正的天花板」——嵌入是每段文字
-    EMBED_MAX_TOKENS（512），生成是 NUM_CTX（8192）。
-    """
-
-    purpose: str
-    model: str
-    prompt_tokens: int = 0
-    output_tokens: int = 0
-    limit: int = 0
-    items: int = 1  # 這次餵了幾段文字。嵌入建索引是一批 8 段，生成永遠是 1
-    longest: int = 0  # 最長的那一段幾個 token —— 上限是「每段」的，所以看這個
-    dropped: int = 0  # 確定被丟掉幾個 token（嵌入算得出來，生成算不出來）
-    estimated_tokens: int = 0  # 送出前估的值。留著是為了跟真實值對照
-    gen_ms: float = 0.0
-
-    @property
-    def total_tokens(self) -> int:
-        return self.prompt_tokens + self.output_tokens
-
-    @property
-    def load_pct(self) -> float:
-        """最長的那一段用掉上限的幾成。"""
-        return 100.0 * (self.longest or self.prompt_tokens) / self.limit if self.limit else 0.0
-
-    @property
-    def tokens_per_s(self) -> float:
-        return 1000.0 * self.output_tokens / self.gen_ms if self.gen_ms else 0.0
-
-    @property
-    def truncated(self) -> bool:
-        """有東西被無聲截掉了。
-
-        兩種判斷，因為兩邊拿得到的證據不一樣：
-
-        **嵌入**：tokenizer 在我們手上，截斷前後的長度都數得出來，所以
-        dropped 是確定的數字。
-
-        **生成**：Ollama 不會說它截了。而且它的截法不是「切掉超出的部分」——
-        2026-09-27 實測，同一個 1,049 token 的 prompt 在 num_ctx=1024 下只吃進
-        514、512 下只吃進 258、256 下只吃進 130，全部剛好是上限的 50.x%。
-        所以「吃進的量 ≥ 上限」永遠不會成立，用那個當旗標等於沒有旗標。
-        能用的證據是估算值與實際值的落差：估算誤差在一成上下，而截斷會讓
-        實際值掉到一半，兩者差得夠遠，抓 80% 這條線不會誤判。
-        """
-        if self.dropped > 0:
-            return True
-        if self.estimated_tokens and self.prompt_tokens:
-            return self.prompt_tokens < self.estimated_tokens * 0.8
-        return False
-
-
-_USAGE: list[Usage] = []
-
-# 記帳要上鎖，理由跟 _EMBEDDER_LOCK 同一個：外殼會在背景執行緒預熱嵌入模型
-# （app/ui.py），那條執行緒也會走到 embed() 的記帳。
-_USAGE_LOCK = threading.Lock()
-
-
-def _record(usage: Usage) -> None:
-    with _USAGE_LOCK:
-        _USAGE.append(usage)
-        if len(_USAGE) > USAGE_LOG_MAX:
-            del _USAGE[:-USAGE_LOG_MAX]
-
-
-def reset_usage() -> None:
-    """把帳清掉。呼叫端要在「這一次判讀」開始前呼叫，畫面才不會把上一次的算進來。"""
-    with _USAGE_LOCK:
-        _USAGE.clear()
-
-
-def usage_log() -> list[Usage]:
-    """這一次判讀記到的每一筆。回傳的是複本，呼叫端改不到內部狀態。"""
-    with _USAGE_LOCK:
-        return list(_USAGE)
-
-
-def last_usage(purpose: str | None = None) -> Usage | None:
-    """最後一筆。purpose 帶了就只找那一種（slm / embedding）。"""
-    with _USAGE_LOCK:
-        for usage in reversed(_USAGE):
-            if purpose is None or usage.purpose == purpose:
-                return usage
-    return None
-
-
-def estimate_slm_tokens(text: str) -> int:
-    """這段文字送進地端模型大概是幾個 token。
-
-    **是估的**。精確值要等呼叫完才有（Ollama 的 prompt_eval_count），而畫面
-    需要在使用者還在打字的時候就講出一個數字。常數的來源與誤差見上面那段註解。
-
-    為什麼不先打一次 Ollama 拿精確值：可以，`num_predict=1` 暖機後只要 25 ms
-    （2026-09-27 實測，47 token 與 749 token 一樣快，而 num_predict=0 沒有用 ——
-    它會照樣自由生成，實測跑了 4.7 秒）。但那條路要 qwen 一直待在記憶體裡
-    （2.4 GB），跟 docs/記憶體評估.md 的結論衝突，而且 Ollama 閒置五分鐘就卸載，
-    卸載後第一次是 788 ms～9.2 秒。所以估算是預設，精確值等真的呼叫。
-    """
-    if not text:
-        return 0
-    return SLM_TEMPLATE_TOKENS + round(len(text) / SLM_CHARS_PER_TOKEN)
-
-
-def estimate_embed_tokens(text: str) -> int:
-    """bge-m3 的 token 數估算值。tokenizer 還沒載入時的替代品。
-
-    比例跟 SLM 那邊巧合地接近（2026-09-27 實測 bge-m3：230 字→183 token、
-    920 字→723 token，都是 1.26～1.27 字/token），但**不加樣板開銷** ——
-    那 25 token 是 Ollama 套對話樣板加上去的，嵌入沒有這回事。
-    """
-    if not text:
-        return 0
-    return round(len(text) / EMBED_CHARS_PER_TOKEN)
-
-
-def count_embed_tokens(text: str) -> int | None:
-    """這段文字在 bge-m3 眼裡是幾個 token。**精確值**，不是估的。
-
-    tokenizer 還沒載入時回 None ——「還不知道」跟「0 個」是兩件事，畫面要分得開。
-
-    刻意不為了數 token 去載 tokenizer：單獨載一份 bge-m3 的 fast tokenizer
-    實測 +384 MB RSS、149 ms（2026-09-27，A 的機器，純 tokenizers 不含 torch），
-    而整個外殼開機才 115 MB —— 光一個 tokenizer 就是開機的三倍多。
-    開機預熱（app/ui.py 的 _warm_up_embedder）跑完之後它本來就在記憶體裡，
-    那時候數一次只要 0.1～0.3 ms，等於免費。
-    """
-    if not text or not _EMBEDDER:
-        return None
-    tok = _EMBEDDER[1]
-    return len(tok(text)["input_ids"])
 
 
 def _require(purpose: str) -> ModelLock:
@@ -401,24 +228,7 @@ def call_slm(prompt: str, *, grammar: str | None = None) -> str:
     }
     if grammar:
         body["format"] = grammar
-    data = _ollama("/api/generate", body, timeout=SLM_TIMEOUT_S)
-    # 這兩個數字 Ollama 本來就回了，以前整包被丟掉 —— 畫面上「這次吃了幾個
-    # token」只有這裡拿得到真值。估算值一併存下來，是為了抓無聲截斷
-    # （理由見 Usage.truncated）。
-    prompt_tokens = int(data.get("prompt_eval_count") or 0)
-    _record(
-        Usage(
-            purpose="slm",
-            model=lock.name,
-            prompt_tokens=prompt_tokens,
-            output_tokens=int(data.get("eval_count") or 0),
-            limit=NUM_CTX,
-            longest=prompt_tokens,
-            estimated_tokens=estimate_slm_tokens(prompt),
-            gen_ms=float(data.get("eval_duration") or 0) / 1e6,
-        )
-    )
-    return data.get("response", "")
+    return _ollama("/api/generate", body, timeout=SLM_TIMEOUT_S).get("response", "")
 
 
 def _import_ml():
@@ -507,40 +317,16 @@ def embed(texts: list[str]) -> list[list[float]]:
     tok, model = _load_embedder(lock)
 
     out: list[list[float]] = []
-    counts: list[int] = []
-    dropped = 0
     with torch.inference_mode():
         for i in range(0, len(texts), EMBED_BATCH):
-            batch = texts[i : i + EMBED_BATCH]
             enc = tok(
-                batch,
+                texts[i : i + EMBED_BATCH],
                 padding=True,
                 truncation=True,
                 max_length=EMBED_MAX_TOKENS,
                 return_tensors="pt",
             )
-            # 補齊之後每一列都一樣長，所以要數的是 attention_mask 的和，
-            # 不是張量的形狀 —— 數形狀會把 padding 當成真的內容。
-            lengths = [int(n) for n in enc["attention_mask"].sum(dim=1).tolist()]
-            counts.extend(lengths)
-            # 剛好頂到上限的那幾段，再不截斷地切一次，才講得出「被丟掉幾個」。
-            # 只在頂到上限時才做，所以正常情況下這一行不花錢（而且 tokenizer
-            # 切一段 0.1～0.3 ms，相對於模型前傳是零）。
-            for text, n in zip(batch, lengths, strict=True):
-                if n >= EMBED_MAX_TOKENS:
-                    dropped += max(0, len(tok(text)["input_ids"]) - n)
             out.extend(_pool(model(**enc).last_hidden_state, enc["attention_mask"], F).tolist())
-    _record(
-        Usage(
-            purpose="embedding",
-            model=lock.name,
-            prompt_tokens=sum(counts),
-            limit=EMBED_MAX_TOKENS,
-            items=len(counts),
-            longest=max(counts, default=0),
-            dropped=dropped,
-        )
-    )
     return out
 
 
