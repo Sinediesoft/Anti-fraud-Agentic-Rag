@@ -184,6 +184,7 @@ class ModuleA:
     def health(self) -> HealthReport:
         """我準備好了沒。required=False 的項目壞了只會降級，不會擋啟動。"""
         ocr_ok, ocr_detail = m2_vision.engine_status()
+        corpus_n = m1_corpus.count_local()
         checks = [
             HealthCheck(
                 name="pack",
@@ -201,8 +202,12 @@ class ModuleA:
             ),
             HealthCheck(
                 name="corpus",
-                ok=bool(m1_corpus.load_local()),
-                detail="自己的語料檔還沒切出來（S9）" if not m1_corpus.load_local() else "",
+                # count_local() 只數行數，不解析 —— 原本這裡呼叫兩次 load_local()，
+                # 把整份 78 MB 語料讀成 81,423 個物件只為了取一個 bool，而
+                # load_local() 有快取之後那 197 MB 會從開機一路留到關機。
+                # health() 每次開畫面都會跑。
+                ok=corpus_n > 0,
+                detail="自己的語料檔還沒切出來（S9）" if corpus_n == 0 else f"{corpus_n:,} 筆",
                 required=False,
             ),
             HealthCheck(name="ocr", ok=ocr_ok, detail=ocr_detail, required=False),

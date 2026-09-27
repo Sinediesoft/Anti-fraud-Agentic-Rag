@@ -49,6 +49,40 @@ class Case:
 _CACHE: tuple[tuple[str, int, int], list[Case]] | None = None
 
 
+def count_local() -> int:
+    """語料有幾筆。**不解析、不建 Case 物件。**
+
+    health() 只需要知道「語料檔在不在、有幾筆」，但它原本是呼叫 load_local()
+    ——整份 78 MB 讀進來、解析成 81,423 個物件，只為了取一個 bool。加上快取
+    之後那 197 MB 還會從開機一路留到關機（實測：`load("all")` 一跑完 RSS 就是
+    314 MB，其中 282 MB 是這件事，而且解析當下的高水位到 572 MB）。
+
+    這支改成二進位分塊數 b"\n"：78 MB 約 30 毫秒、記憶體幾乎不動。
+
+    數 b"\n" 跟 load_local() 的 split("\n") 等價 —— U+2028 在 UTF-8 裡是
+    e2 80 a8，不含 0x0a，所以那個坑在這裡不存在（相對的，**不能**改用
+    splitlines()，理由見 load_local()）。寫檔的那一端每筆後面都補 "\n"、
+    不寫空行，所以換行數就是筆數；最後一位元組不是換行時補 1。
+
+    語料已經在快取裡就直接回長度，不重讀。
+    """
+    if not LOCAL_CORPUS.exists():
+        return 0
+    stat = LOCAL_CORPUS.stat()
+    stamp = (str(LOCAL_CORPUS), stat.st_mtime_ns, stat.st_size)
+    if _CACHE is not None and _CACHE[0] == stamp:
+        return len(_CACHE[1])
+    n = 0
+    last = b""
+    with LOCAL_CORPUS.open("rb") as f:
+        while chunk := f.read(1 << 20):
+            n += chunk.count(b"\n")
+            last = chunk[-1:]
+    if last and last != b"\n":
+        n += 1  # 最後一筆沒有換行結尾
+    return n
+
+
 def load_local() -> list[Case]:
     """讀自己切好的那一份。沒有就回空的 —— 不要在這裡爆炸。
 
@@ -92,20 +126,34 @@ def load_local() -> list[Case]:
     # 模組 C 在 b6387a8 就踩過同一個坑並記了下來（10,051 筆裡有 2 個），
     # 但那是他的資料夾，這邊沒跟著改。受害者的自由敘述什麼字元都有，
     # 用自己造的測試資料永遠碰不到這個。
-    for line in LOCAL_CORPUS.read_text(encoding="utf-8").split("\n"):
-        if not line.strip():
-            continue
-        raw = json.loads(line)
-        cases.append(
-            Case(
-                case_id=str(raw.get("case_id", "")),
-                text=raw.get("text", ""),
-                source=raw.get("source", "165"),
-                label=raw.get("label", ""),
-                date=raw.get("date", ""),
-                county=raw.get("county", ""),
+    # 逐行串流，不要 read_text().split("\n")。
+    #
+    # 那個寫法會讓「整份 78 MB 的字串」「切出來的 81,423 個字串的 list」與
+    # 「建好的 Case 物件」同時存在，實測解析當下的高水位比穩態高 258 MB。
+    # 更糟的是這件事現在發生在 bge-m3（1.9 GB）載入之後 —— 配置器很難把那段
+    # 還給系統，實測跑完整輪之後多留 106 MB。串流之後這兩個問題一起消失。
+    #
+    # newline="\n" 是必要的：不指定就是通用換行模式，\r 與 \r\n 也會斷行。
+    # json.dumps 會把 \r 跳脫成 \\r，所以實務上不會有裸的 \r，但明著寫死
+    # 比較不會在換了寫檔那端之後才發現。
+    #
+    # 這樣仍然只在 \n 斷行，U+2028 不受影響（它在 UTF-8 裡是 e2 80 a8）——
+    # 那個坑只在 str.splitlines() 才會踩到，下面那段註解講的就是它。
+    with LOCAL_CORPUS.open(encoding="utf-8", newline="\n") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            raw = json.loads(line)
+            cases.append(
+                Case(
+                    case_id=str(raw.get("case_id", "")),
+                    text=raw.get("text", ""),
+                    source=raw.get("source", "165"),
+                    label=raw.get("label", ""),
+                    date=raw.get("date", ""),
+                    county=raw.get("county", ""),
+                )
             )
-        )
     _CACHE = (stamp, cases)
     return list(cases)
 

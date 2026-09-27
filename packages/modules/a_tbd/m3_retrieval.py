@@ -298,10 +298,17 @@ def build_index(*, batch: int = EMBED_BATCH, checkpoint_every: int = CHECKPOINT_
 
     # 先正規化，之後比對就是單純的內積，省一次除法也少一處出錯的地方
     arr /= np.linalg.norm(arr, axis=1, keepdims=True)
-    np.save(VECTORS, arr)
-    CASE_IDS.write_text(
-        json.dumps([c.case_id for c in cases], ensure_ascii=False), encoding="utf-8"
-    )
+    # 寫暫存再 rename，不要就地覆蓋。
+    #
+    # 檢索端是用 mmap_mode="r" 對映這個檔的：就地覆蓋等於在別人讀到一半時把
+    # 底下的內容換掉，對映到的會是半成品。os.replace 是原子的，而且會換成
+    # 新的 inode —— 舊的對映繼續指著舊檔案，直到那邊自己失效重載。
+    tmp_vec = VECTORS.with_suffix(".tmp.npy")
+    np.save(tmp_vec, arr)
+    os.replace(tmp_vec, VECTORS)
+    tmp_ids = CASE_IDS.with_suffix(".tmp.json")
+    tmp_ids.write_text(json.dumps([c.case_id for c in cases], ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp_ids, CASE_IDS)
     lock = models.MODEL_LOCK["embedding"]
     META.write_text(
         json.dumps(
@@ -341,7 +348,11 @@ def _load_index():
     stamp = (vs.st_mtime_ns, vs.st_size, cs.st_mtime_ns)
     if _INDEX_CACHE is not None and _INDEX_CACHE[0] == stamp:
         return _INDEX_CACHE[1], _INDEX_CACHE[2]
-    arr = np.load(VECTORS)
+    # mmap_mode="r"：不要把 334 MB 讀成匿名記憶體，改成檔案對映，讓作業系統
+    # 決定要留多少頁在實體記憶體裡。vectors.npy 是唯讀的，這樣做沒有風險，
+    # 而且記憶體吃緊時這些頁可以被回收（匿名記憶體只能換到 swap）。
+    # 五個模組都接上向量庫之後差別會很明顯 —— 見 docs/記憶體評估.md。
+    arr = np.load(VECTORS, mmap_mode="r")
     ids = json.loads(CASE_IDS.read_text(encoding="utf-8"))
     _INDEX_CACHE = (stamp, arr, ids)
     return arr, ids
