@@ -50,6 +50,8 @@ def _relevant_from_judgements() -> dict[int, list[str]]:
 def run() -> dict[str, float]:
     module = build_module()
     scores: dict[str, float] = {}
+    # 在最外層宣告：沒有考題檔時下面那個 if 整段不會跑，收尾還是會讀到它
+    analyze_p95_ms: list[float] = []
 
     if QUESTIONS.exists():
         questions = yaml.safe_load(QUESTIONS.read_text(encoding="utf-8")) or []
@@ -75,7 +77,9 @@ def run() -> dict[str, float]:
                 gold = list(q.get("gold_case_ids") or [])
                 if not gold:
                     continue
+                started = time.perf_counter()
                 verdict = module.analyze(AnalyzeInput(text=q.get("text", "")))
+                analyze_p95_ms.append((time.perf_counter() - started) * 1000)
                 retrieved.append([c.case_id for c in verdict.similar_cases])
                 gold_only.append(gold)
                 # 判定過的題目用整組相關案例，沒判定過的退回單一 gold
@@ -96,4 +100,16 @@ def run() -> dict[str, float]:
         mark = "[OK]" if row.passed else "[X]"
         arrow = ">=" if row.direction == "ge" else "<="
         print(f"  {mark} {row.metric:<18} {row.value:.3f}  （門檻 {arrow} {row.threshold}）")
+
+    # latency_p95_s 量的是 can_handle（路由那一下），全隊同一個定義，不動它。
+    # 但 S13 之後 analyze() 裡面多了一次地端模型呼叫，端到端的時間跟路由差三個
+    # 數量級 —— 只報路由的數字會讓人以為這個系統零延遲。另外報，不併進上面那張表：
+    # shared.eval.THRESHOLDS 沒有這個指標，併進去會印成「門檻 >= 0.0」，
+    # 而延遲是越小越好，方向剛好相反。
+    if analyze_p95_ms:
+        scores["analyze_p95_s"] = shared_eval.latency_p95(analyze_p95_ms) / 1000
+        print(
+            f"       analyze 端到端 p95  {scores['analyze_p95_s']:.3f}s"
+            f"　（含地端模型與檢索，{len(analyze_p95_ms)} 題）"
+        )
     return scores

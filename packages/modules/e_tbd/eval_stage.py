@@ -9,9 +9,15 @@
 模型輸出會快取到 `data/slm_stage_cache.json`，prompt 變了就自動失效
 （快取的鍵含 prompt 的 hash）。重跑不想用快取就加 --fresh。
 
+**單次跑出來的分數不要直接寫進報告。** Ollama 重新載入模型之後，同樣的 prompt、
+`temperature=0`、固定 seed，答案仍然會變（實測 60 筆裡有 4 筆的付款次數不同，
+準確率 0.533 → 0.500）。同一次載入之內倒是完全確定的 —— 連跑五輪零差異。
+所以 `--rounds N` 會關掉快取連跑 N 輪並報範圍，報告請引用範圍不要引用單次值。
+
 用法：
     uv run python packages/modules/e_tbd/eval_stage.py
     uv run python packages/modules/e_tbd/eval_stage.py --fresh
+    uv run python packages/modules/e_tbd/eval_stage.py --rounds 3
 """
 
 from __future__ import annotations
@@ -141,6 +147,10 @@ def _confusion(y_true: list[str], y_pred: list[str]) -> None:
 
 def main() -> int:
     fresh = "--fresh" in sys.argv
+    rounds = 1
+    if "--rounds" in sys.argv:
+        rounds = max(1, int(sys.argv[sys.argv.index("--rounds") + 1]))
+        fresh = True  # 多輪的重點就是不要重用上一輪的結果
     if not GOLD.exists() or not SAMPLE.exists():
         print(f"缺檔案：{GOLD if not GOLD.exists() else SAMPLE}")
         return 1
@@ -155,6 +165,16 @@ def main() -> int:
 
     print("呼叫模型中（有快取的直接跳過）…")
     slm, latencies = _run_slm(rows, fresh=fresh)
+
+    extra_rounds: list[float] = []
+    for n in range(rounds - 1):
+        print(f"第 {n + 2} 輪（不用快取）…", flush=True)
+        again, _ = _run_slm(rows, fresh=True)
+        preds = [
+            m4_judgement.combine_stage(rule, _as_call(again[r["case_id"]]))
+            for r, rule in zip(rows, y_rule, strict=True)
+        ]
+        extra_rounds.append(sum(a == b for a, b in zip(y_true, preds, strict=True)) / len(rows))
 
     # 退路：模型沒給答案就用規則層的，這跟 m4_judgement 的第三層一致
     y_slm = [slm[r["case_id"]]["stage"] or rule for r, rule in zip(rows, y_rule, strict=True)]
@@ -184,6 +204,15 @@ def main() -> int:
         print(
             f"新呼叫的延遲 p95 {shared_eval.latency_p95(latencies):.0f} ms（{len(latencies)} 次）"
         )
+    if extra_rounds:
+        accs = [comb["accuracy"], *extra_rounds]
+        gains = [shared_eval.relative_gain(rule["accuracy"], a) for a in accs]
+        print(
+            f"{rounds} 輪：準確率 {min(accs):.3f} ~ {max(accs):.3f}　"
+            f"相對提升 {min(gains):+.1%} ~ {max(gains):+.1%}　"
+            f"（{sum(1 for g in gains if g >= 0.10)}/{rounds} 輪達標）"
+        )
+        print("報告請引用這個範圍，不要引用單次值。")
     print("結論：" + ("達標" if gain_acc >= 0.10 else "未達標"))
 
     OUT.write_text(

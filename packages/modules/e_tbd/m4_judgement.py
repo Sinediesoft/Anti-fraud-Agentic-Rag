@@ -170,7 +170,17 @@ def judge(
     confidence = Confidence.MEDIUM
     call: slm_stage.StageCall | None = None
 
-    for attempt in range(2):
+    score = keyword_score(text, positive, negative)
+    rule_stage = detect_stage(text, stages)
+
+    # 規則已經抓到決定性訊號時不呼叫模型 —— combine_stage 本來就會丟掉它的答案，
+    # 叫了也是白叫。實測一次呼叫 640ms 有 97% 花在生成，而 gold 那 60 筆裡
+    # 有 40% 落在這條捷徑上。
+    skip = rule_stage in RULE_OWNED
+    if skip:
+        notes.append(f"規則層已判定「{rule_stage}」，這一階不看模型")
+
+    for attempt in range(0 if skip else 2):
         try:
             call = slm_stage.classify(text)
         except models.ModelNotSelectedError as exc:
@@ -188,8 +198,6 @@ def judge(
             notes.append("模型輸出不合格式，退到規則抽取")
             confidence = Confidence.LOW
 
-    score = keyword_score(text, positive, negative)
-    rule_stage = detect_stage(text, stages)
     stage_id = combine_stage(rule_stage, call)
     profile = extract_profile(text, platform_terms=platform_terms, stage_id=stage_id)
 
