@@ -297,6 +297,81 @@ A（LINE × 假投資）與 C（Facebook × 投資詐騙）是同一個手法、
 17,764 筆分層取樣出來的，現在的語料分布已經不是那個樣子。兩件都還沒做，
 `pack.yaml` 已標記。
 
+### 6.7 onnxruntime 的遙測執行緒讓行程收尾崩潰，修法卡在共用層
+
+`pytest` 整套跑完，測試全過，然後**行程在收尾時崩掉**：退出碼 139（SIGSEGV）
+或 134（SIGABRT，訊息是 `libc++abi: terminating due to uncaught exception of
+type std::__1::system_error: recursive_mutex lock failed`）。因為崩在測試結束
+之後，`200 passed` 照樣印得出來，很容易被當成雜訊。
+
+**根因**（2026-09-27 查）。macOS 崩潰報告 5 份，4 份頂層映像都是
+`onnxruntime_pybind11_state.so`，堆疊由內而外：
+
+```
+Microsoft::Applications::Events::PlatformAbstraction::Worker
+Microsoft::Applications::Events::TransmissionPolicyManager::…
+Microsoft::Applications::Events::StorageObserver::handleRetrieve
+Microsoft::Applications::Events::Packager::handleFinalizePackage
+Microsoft::Applications::Events::HttpRequestEncoder::handleEvent
+std::__1::pair<std::__1::__tree_iterator…            ← 崩在這
+libsystem_pthread.dylib  _pthread_start
+```
+
+`Microsoft::Applications::Events` 是 onnxruntime 內建的 1DS 遙測 SDK。那是一條
+背景 worker 執行緒，行程結束時還活著，去摸已經被解構的靜態狀態。整條堆疊
+沒有一格是我們的程式。
+
+**觸發條件**（每組跑 6 次）：
+
+| 組合 | 崩潰率 |
+|---|---|
+| 完整套件 | **4/6** |
+| 去掉 vision 測試（不建真的 OCR session） | 0/6 |
+| 去掉 shared_models 測試（不載入 torch／bge-m3） | 0/6 |
+| 兩個都去掉 | 0/6 |
+
+缺一邊就不會發生。崩的程式碼全在 onnxruntime 的遙測裡，torch 的作用是把
+收尾時序推到會出事的那一邊。
+
+**影響範圍有限**：CI 只裝 dev 那組、沒有 rapidocr，真引擎測試會
+`importorskip` 跳過，所以 CI 不會因此變紅。只有裝了 `ocr` extra 的本機會踩到，
+而且只影響退出碼、不影響任何測試結果。
+
+**修法找到了，但放不進這個模組。** `onnxruntime.disable_telemetry_events()`
+是 1.30 的官方 API，實測有效 —— 但**時機決定有沒有效**：
+
+| 呼叫時機 | 崩潰率 |
+|---|---|
+| `pytest_configure`（onnxruntime 剛 import、還沒建任何 session） | **0/6** |
+| `m2_vision._make_engine()`（第一次建引擎時才關） | 1/6 |
+
+第二種只從 4/6 降到 1/6，因為測試裡 `pytest.importorskip("rapidocr")` 早就把
+onnxruntime 連帶 import 進來、worker 已經起跑了，那時再關已經來不及。
+
+而第二種寫法本身也過不了越界檢查：`tools/check_boundaries.py` 把
+`onnxruntime` 列在 `MODEL_PACKAGES`（「模型呼叫請用 shared.models」），
+模組裡直接 import 就是違規，沒有豁免機制。試過之後已經撤回。
+
+**所以這件事該在共用層解決**，而且照專案自己的設計本來就該在那裡 ——
+`check_boundaries.py` 的 `NETWORK_PACKAGES` 上面寫著「出網的口只有
+shared.models 一個」，而遙測正好是一條出網路徑。建議併進 PR #47
+（`feat(shared): OCR 認字收進共用層`，解凍變更），在 onnxruntime 第一次被
+import 之後、任何 session 建立之前就關掉。這是五人共管路徑，不是 A 自己
+能決定的。
+
+**順帶查的網路問題。** 檔頭與本報告都寫過 OCR「模型包在套件裡、不連網」。
+那句話對模型權重成立（沒有下載），對推論引擎不成立：
+
+- `onnxruntime_pybind11_state.so` 裡烤著端點
+  `https://mobile.events.data.microsoft.com/OneCollector/1.0`
+- 但實測**沒有觀察到連線**：不關遙測、跑完一次真 OCR，之後 26 秒內以 0.2 秒
+  間隔採樣 `lsof -a -p PID -i`，**0/112 次**看到任何網路 socket
+
+所以目前的證據是「遙測子系統會跑、會崩，但沒有在傳」。這不等於保證 ——
+採樣看不到 0.2 秒以內開關的連線，也沒有涵蓋別的平台與別的版本。截圖內容
+不會進遙測，但這個系統處理的是受害者的截圖，不該靠「它應該不會傳我們在意的
+欄位」來安心。把它關掉是免費的。
+
 ## 7. 七項交付定義
 
 以 `make selfcheck MODULE=a_tbd` 2026-09-22 的結果為準（**7/7，可以掛載**）。
