@@ -106,6 +106,111 @@ def _render_trace(trace, scores, *, key: str) -> None:
 
 
 # ══════════════════════════════════════════════════════════════
+#  token 用量
+# ══════════════════════════════════════════════════════════════
+#
+# 分成「送出前」與「判讀後」兩段，因為這兩個數字的可信度不一樣，混成一格
+# 會騙到自己：
+#
+#   送出前  這一次會吃掉多少 —— 嵌入模型載入之後是 tokenizer 真的切出來的
+#           精確值，載入之前只能估（約 1.27 字/token）。
+#   判讀後  實際吃掉了多少 —— Ollama 與 tokenizer 回報的真值，蓋掉上面那個。
+#
+# 為什麼不是每打一個字就跳：Streamlit 的輸入元件只在送出、失焦或有按鈕觸發
+# rerun 時才把值交回 Python，沒有逐鍵事件。真要逐鍵只能用 components.v1.html
+# 塞一段 JS，但那段 JS 在自己的 iframe 裡看不到 st.chat_input 的內容 ——
+# 等於要把輸入框整個換掉，代價遠大於效益。所以這裡的「即時」是「每一次
+# 互動都重算」，而不是「每一個按鍵都重算」。
+#
+# 沒有雲端（已砍），所以這一格不是在算錢，是在看三件事：512 的截斷預警、
+# 8192 上下文的餘裕、以及 tok/s（那個數字要寫進報告）。
+
+
+def _snapshot_usage(key: str) -> None:
+    """把這一次記到的 token 帳存進這個連線自己的狀態。
+
+    只在有東西時才蓋掉舊的：追問那幾輪不呼叫任何模型（路由只用關鍵詞算分），
+    如果照樣覆蓋，使用者會看到上一次的真實數字忽然變成空白，像壞掉一樣。
+    """
+    if usage := models.usage_log():
+        st.session_state[key] = usage
+
+
+def _live_tokens(text: str) -> tuple[int, bool]:
+    """（token 數, 是不是精確值）。精確值要等嵌入模型的 tokenizer 載入。"""
+    exact = models.count_embed_tokens(text)
+    if exact is not None:
+        return exact, True
+    return models.estimate_embed_tokens(text), False
+
+
+def _render_live_tokens(text: str, *, images: int = 0) -> None:
+    """送出前：這段文字進檢索會吃掉多少。"""
+    limit = models.EMBED_MAX_TOKENS
+    n, exact = _live_tokens(text)
+    # 單位放標籤不放數值：右欄只有畫面寬度的五分之二，「528 / 512 token」
+    # 在筆電的視窗寬度下會被 st.metric 截成「528 / 512 to…」。
+    st.metric("檢索 token", f"{n:,} / {limit:,}")
+    st.progress(min(n / limit, 1.0) if limit else 0.0)
+    st.caption(
+        "這次要送進檢索的文字，tokenizer 真的切出來的長度。"
+        if exact
+        else "這次要送進檢索的文字，估的（約 1.27 字/token）—— 嵌入模型還在背景載入，載完換精確值。"
+    )
+    if n > limit:
+        st.warning(
+            f"超過 {limit:,} token —— bge-m3 只吃前面那 {limit:,} 個，後面會被無聲截掉。"
+            "講重點，或分兩次問。"
+        )
+    if images:
+        st.caption(f"另外有 {images} 張截圖：OCR 出來的文字要等判讀時才會加進去，實際會比這裡多。")
+
+
+def _render_usage(usage: list[models.Usage]) -> None:
+    """判讀後：真的吃掉了多少。"""
+    if not usage:
+        # 兩個分頁共用這一句，所以講的是「路由」不是「追問」—— 單次查詢沒有追問。
+        st.caption("還沒有呼叫過模型 —— 路由只用關鍵詞算分，一個 token 都不花。")
+        return
+
+    embed = [u for u in usage if u.purpose == "embedding"]
+    slm = [u for u in usage if u.purpose == "slm"]
+    st.caption("最後一次真的呼叫模型的那一次：")
+
+    if embed:
+        total = sum(u.prompt_tokens for u in embed)
+        items = sum(u.items for u in embed)
+        longest = max(u.longest for u in embed)
+        dropped = sum(u.dropped for u in embed)
+        st.write(f"🔎 **檢索** `{embed[0].model}` —— {total:,} token／{items} 段，最長 {longest:,}")
+        if dropped:
+            st.error(
+                f"最長那一段超過 {embed[0].limit:,} token，被無聲截掉 {dropped:,} 個 —— "
+                f"檢索只看得到前面那 {embed[0].limit:,} 個。"
+            )
+
+    if not slm:
+        st.caption("🧠 生成：這次沒有呼叫地端模型（只有接上生成的模組才有這一段）。")
+        return
+
+    u = slm[-1]
+    st.write(
+        f"🧠 **生成** `{u.model}` —— 送進 {u.prompt_tokens:,} ＋ 吐出 {u.output_tokens:,} token"
+    )
+    st.caption(f"佔 num_ctx {u.limit:,} 的 {u.load_pct:.1f}%　·　{u.tokens_per_s:.0f} tok/s")
+    if u.estimated_tokens:
+        gap = u.prompt_tokens - u.estimated_tokens
+        st.caption(
+            f"送出前估 {u.estimated_tokens:,}，實際 {u.prompt_tokens:,} token（差 {gap:+,}）"
+        )
+    if u.truncated:
+        st.error(
+            "prompt 超過 num_ctx —— Ollama 不是切掉超出的部分，而是從前面砍到只剩上限的"
+            "一半（2026-09-27 實測），最前面的系統指示可能整段不見了。"
+        )
+
+
+# ══════════════════════════════════════════════════════════════
 #  ① 對話
 # ══════════════════════════════════════════════════════════════
 
@@ -145,7 +250,9 @@ def _chat_tab(shell: Shell) -> None:
             help="不想再回答了也沒關係，用目前講的內容就判讀",
         ):
             with st.spinner("交給最有把握的那個模組判讀…"):
+                models.reset_usage()
                 chat.finish()
+            _snapshot_usage("chat_usage")
             st.rerun()
         if controls[1].button("重新開始"):
             chat.restart()
@@ -162,10 +269,16 @@ def _chat_tab(shell: Shell) -> None:
     if prompt := st.chat_input("用你自己的話講就好…"):
         chat.add_images(_uploads_to_images(uploads))
         with st.spinner("想一下…"):
+            models.reset_usage()
             chat.send(prompt)
+        _snapshot_usage("chat_usage")
         st.rerun()
 
     with right:
+        st.subheader("token 用量")
+        _render_live_tokens(chat.text, images=len(chat.images))
+        _render_usage(st.session_state.get("chat_usage", []))
+
         st.subheader("執行紀錄")
         if chat.score_history:
             st.markdown("#### 每問一題，分數怎麼變")
@@ -200,6 +313,15 @@ def _form_tab(shell: Shell, manual: str | None) -> None:
         )
         go = st.button("看看我遇到什麼", type="primary", use_container_width=True)
 
+    with right:
+        st.subheader("token 用量")
+        _render_live_tokens(text, images=len(uploads or []))
+        # 真值要等判讀跑完才有。這個分頁不像對話分頁那樣會 st.rerun()，
+        # 所以先在右欄留一個位子，判讀完再把真值填進同一個位子。
+        usage_slot = st.empty()
+    with usage_slot.container():
+        _render_usage(st.session_state.get("form_usage", []))
+
     if not go:
         return
 
@@ -208,7 +330,11 @@ def _form_tab(shell: Shell, manual: str | None) -> None:
         st.warning("請至少打幾個字，或上傳一張截圖。")
         return
 
+    models.reset_usage()
     response = shell.analyze(payload, manual=manual)
+    _snapshot_usage("form_usage")
+    with usage_slot.container():
+        _render_usage(st.session_state.get("form_usage", []))
 
     with left:
         st.subheader("② 判讀結果")
