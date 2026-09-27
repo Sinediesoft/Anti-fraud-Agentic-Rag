@@ -365,11 +365,11 @@ AGENT_ROWS = (
                 T(
                     "先過關鍵字門檻，",
                     "bge-m3 編碼問句，",
-                    "和 17,764 筆向量算內積",
+                    "和 81,423 筆向量算內積",
                     "＋手法詞加分，取前 5 筆",
                 ),
                 cpu3("bge-m3"),
-                T("索引 73 MB，每次查詢", "從磁碟讀進記憶體"),
+                T("索引 334 MB，載入後", "常駐記憶體快取"),
             ),
             Cell(
                 T("bge-m3 編碼問句，", "和 10,051 筆向量算內積，", "門檻 0.60，取前 5 筆"),
@@ -1225,8 +1225,8 @@ MEMORY_SVG = """
   <text class="mm-name" x="36" y="123">OCR：PP-OCRv6 small</text>
   <text class="mm-sub" x="36" y="140">第一張截圖才載入；跑久了約 1.5 GB</text>
   <rect class="mm-item mm-dash" x="22" y="158" width="416" height="44" rx="8"/>
-  <text class="mm-name" x="36" y="175">索引＋語料（A 73 MB、C 64 MB）</text>
-  <text class="mm-sub" x="36" y="192">每次查詢從磁碟讀進來，用完就放掉</text>
+  <text class="mm-name" x="36" y="175">索引＋語料（A 約 540 MB、C 64 MB）</text>
+  <text class="mm-sub" x="36" y="192">A 索引 334＋語料 197 MB，載入後都常駐；C 用完就放掉</text>
   <line class="mm-arrow" x1="230" y1="218" x2="230" y2="272" marker-end="url(#mm-arrow)"/>
   <text class="mm-sub" x="244" y="240">call_slm() 經 HTTP</text>
   <text class="mm-code" x="244" y="257">127.0.0.1:11434</text>

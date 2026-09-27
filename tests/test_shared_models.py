@@ -157,3 +157,165 @@ def test_其餘取樣參數也鎖死():
 def test_模型版本表有四個用途():
     assert set(models.MODEL_LOCK) == {"slm", "embedding", "reranker", "cloud"}
     assert models.all_locked() is False  # S3 還沒做
+
+
+# ── token 記帳 ──────────────────────────────────────────────────
+
+
+def test_call_slm把Ollama回傳的token數記下來():
+    """畫面上要顯示「這次吃了幾個 token」，而真值只有這一層摸得到：
+    外殼看不到 HTTP 回傳，模組拿到的是一個字串。"""
+    lock = models.MODEL_LOCK["slm"]
+    real = models._ollama
+
+    def fake(path, payload=None, timeout=10.0):
+        if path == "/api/tags":
+            return {"models": [{"name": lock.name, "digest": lock.revision + "0" * 52}]}
+        return {
+            "response": "好",
+            "prompt_eval_count": 55,
+            "eval_count": 14,
+            "eval_duration": 236_000_000,  # 奈秒，Ollama 的單位
+        }
+
+    models._ollama = fake
+    models._SLM_VERIFIED = ""
+    models.reset_usage()
+    try:
+        assert models.call_slm("測試") == "好"
+    finally:
+        models._ollama = real
+        models._SLM_VERIFIED = ""
+
+    usage = models.last_usage("slm")
+    assert usage is not None
+    assert (usage.prompt_tokens, usage.output_tokens) == (55, 14)
+    assert usage.limit == models.NUM_CTX  # 上限是 num_ctx，不是 num_predict
+    assert round(usage.tokens_per_s) == 59  # 14 token / 236 ms
+    models.reset_usage()
+
+
+def test_記帳清得掉也留得住():
+    models.reset_usage()
+    assert models.usage_log() == []
+    assert models.last_usage() is None
+
+    models._record(models.Usage("embedding", "bge-m3", prompt_tokens=21, limit=512))
+    models._record(models.Usage("slm", "qwen", prompt_tokens=55, output_tokens=14, limit=8192))
+    assert len(models.usage_log()) == 2
+    assert models.last_usage().purpose == "slm"
+    assert models.last_usage("embedding").prompt_tokens == 21
+    models.reset_usage()
+
+
+def test_記帳回傳的是複本():
+    """畫面那一層拿到之後亂改，動不到這裡的狀態。"""
+    models.reset_usage()
+    models._record(models.Usage("slm", "qwen", prompt_tokens=1, limit=8192))
+    models.usage_log().clear()
+    assert len(models.usage_log()) == 1
+    models.reset_usage()
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="沒裝 ml 那組套件")
+def test_嵌入記的是tokenizer真的切出來的數字():
+    """只有裝了 extra 的機器會跑。這裡要的是「精確」不是「大概」——
+    512 的截斷是無聲的，估出來的數字擋不住它。
+
+    16 這個數字是 bge-m3（鎖定的那個 revision）切出來的，換模型會紅，那是對的。
+    """
+    models.reset_usage()
+    models.embed(["他叫我去超商買點數然後拍序號給他"])  # 16 字，實測 16 token
+    usage = models.last_usage("embedding")
+    assert usage is not None
+    assert usage.prompt_tokens == 16
+    assert usage.items == 1
+    assert usage.limit == models.EMBED_MAX_TOKENS
+    assert usage.dropped == 0
+    models.reset_usage()
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="沒裝 ml 那組套件")
+def test_嵌入超過上限時講得出被丟掉幾個():
+    """超過 512 的部分 tokenizer 直接丟掉，不報錯。畫面要說得出丟了多少，
+    只說「有截到」沒有用 —— 使用者不知道該刪掉多少字。"""
+    models.reset_usage()
+    # 640 字，未截斷實測 562 token（重複的句子會被 BPE 壓掉，所以不是 640/1.27）
+    models.embed(["他叫我去超商買點數然後拍序號給他" * 40])
+    usage = models.last_usage("embedding")
+    assert usage is not None
+    assert usage.longest == models.EMBED_MAX_TOKENS
+    assert usage.dropped == 562 - models.EMBED_MAX_TOKENS
+    models.reset_usage()
+
+
+def test_記帳不會無上限地長():
+    """建索引會把 embed() 呼叫上萬次（81,423 筆 / batch 8）。
+    記帳自己不可以變成記憶體問題。"""
+    models.reset_usage()
+    for _ in range(models.USAGE_LOG_MAX + 30):
+        models._record(models.Usage("embedding", "bge-m3", prompt_tokens=1, limit=512))
+    assert len(models.usage_log()) == models.USAGE_LOG_MAX
+    models.reset_usage()
+
+
+def test_估算的常數是量出來的():
+    """畫面要在「還沒送出」的那一刻就講出一個數字，只能估。常數換了這條先紅。"""
+    assert models.estimate_slm_tokens("") == 0
+    # 2026-09-27 拿 qwen2.5:3b 實測：這句 47 字的敘述吃 62 token
+    句 = "我在臉書看到投資廣告，加了對方的LINE，他自稱分析師，帶我在一個App下單，前兩次有出金成功"
+    assert abs(models.estimate_slm_tokens(句) - 62) <= 4
+    # 嵌入沒有對話樣板那 25 token，所以同一句話估出來一定比 SLM 少
+    assert models.estimate_embed_tokens(句) < models.estimate_slm_tokens(句)
+    assert models.estimate_embed_tokens("") == 0
+
+
+def test_數token不會順手載一份tokenizer():
+    """單獨載一份 bge-m3 的 fast tokenizer 實測 +384 MB RSS，而整個外殼開機才
+    115 MB。還沒載入時要回 None（「還不知道」），不是 0（「沒有內容」）。"""
+    real = models._EMBEDDER
+    models._EMBEDDER = ()
+    try:
+        assert models.count_embed_tokens("我被騙了") is None
+    finally:
+        models._EMBEDDER = real
+
+
+def test_截斷旗標兩邊用的證據不一樣():
+    # 嵌入：tokenizer 在我們手上，被丟掉幾個是算得出來的確定值
+    assert models.Usage(
+        "embedding", "bge-m3", prompt_tokens=512, limit=512, longest=512, dropped=50
+    ).truncated
+    # 生成：Ollama 不會說它截了，而且它的截法是「砍到剩一半」——2026-09-27 實測，
+    # 1,049 token 的 prompt 在 num_ctx=1024 下只吃進 514。所以「吃進的量 ≥ 上限」
+    # 永遠不會成立，只能靠估算值與實際值的落差。
+    assert models.Usage(
+        "slm", "qwen", prompt_tokens=514, limit=1024, estimated_tokens=1049
+    ).truncated
+    # 估算本身的誤差（一成上下）不可以觸發旗標，否則每次都在喊狼來了。
+    # 這組是真實的 C 生成 prompt：490 字，估 411、實際 364。
+    assert not models.Usage(
+        "slm", "qwen", prompt_tokens=364, limit=8192, estimated_tokens=411
+    ).truncated
+
+
+def test_計量器在tokenizer載入前退回估算():
+    """畫面右側要一直有數字可以顯示，包含開機預熱還沒跑完的那幾秒。
+    回傳的第二個值是「這是不是精確值」—— 畫面要照實講，不可以把估的說成真的。"""
+    句 = "他叫我去超商買點數然後拍序號給他"
+    real = models._EMBEDDER
+    models._EMBEDDER = ()
+    try:
+        n, exact = models.token_gauge(句)
+    finally:
+        models._EMBEDDER = real
+    assert exact is False
+    assert n == models.estimate_embed_tokens(句)
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="沒裝 ml 那組套件")
+def test_計量器在tokenizer載入後給精確值():
+    models.embed(["暖機"])  # 預熱，跟外殼開機做的事一樣
+    n, exact = models.token_gauge("他叫我去超商買點數然後拍序號給他")
+    assert exact is True
+    assert n == 16

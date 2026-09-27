@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 import pytest
 from contracts import AnalyzeInput, Verdict
 from shared import models
@@ -333,7 +336,6 @@ def test_讀得回帶有U2028的語料(tmp_path, monkeypatch):
 
     模組 C 在 b6387a8 就踩過同一個坑（10,051 筆裡有 2 個）。
     """
-    import json
 
     from modules.a_tbd import m1_corpus
 
@@ -359,3 +361,132 @@ def test_判讀過程一定先經過去識別化():
     steps = [e.step for e in verdict.trace]
     assert "shared.deid:去識別化" in steps
     assert steps.index("shared.deid:去識別化") < steps.index("m4:分類與抽取")
+
+
+# ── 索引的斷點續建（2026-09-24）───────────────────────────────────
+
+
+def _fake_embedder(dim: int = 8, fail_after: int | None = None):
+    """決定性的假嵌入，不碰 bge-m3。
+
+    真模型在 CI 沒有、本機也要 4 GB 記憶體，而這幾條測的是斷點邏輯本身
+    （存到哪、接得回來、指紋對不對），跟向量的內容無關。
+    """
+    state = {"n": 0}
+
+    def embed(texts: list[str]) -> list[list[float]]:
+        out = []
+        for t in texts:
+            state["n"] += 1
+            if fail_after is not None and state["n"] > fail_after:
+                raise RuntimeError("模擬編到一半掛掉")
+            seed = int(hashlib.sha256(t.encode()).hexdigest()[:8], 16)
+            out.append([((seed >> (i * 3)) % 97) + 1.0 for i in range(dim)])
+        return out
+
+    return embed
+
+
+def _tiny_corpus(tmp_path, monkeypatch, n: int = 20):
+    """把 M1 的語料檔與 M3 的索引路徑都導到 tmp_path。"""
+    from modules.a_tbd import m1_corpus, m3_retrieval
+
+    corpus = tmp_path / "cases.jsonl"
+    corpus.write_text(
+        "\n".join(
+            json.dumps(
+                {"case_id": f"A-{i}", "text": f"第{i}筆：我在LINE群組被騙了", "source": "165"},
+                ensure_ascii=False,
+            )
+            for i in range(n)
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(m1_corpus, "LOCAL_CORPUS", corpus)
+    index = tmp_path / "index"
+    index.mkdir()
+    monkeypatch.setattr(m3_retrieval, "INDEX_DIR", index)
+    monkeypatch.setattr(m3_retrieval, "VECTORS", index / "vectors.npy")
+    monkeypatch.setattr(m3_retrieval, "CASE_IDS", index / "case_ids.json")
+    monkeypatch.setattr(m3_retrieval, "META", index / "meta.json")
+    monkeypatch.setattr(m3_retrieval, "CKPT_VECTORS", index / "_build_vectors.npy")
+    monkeypatch.setattr(m3_retrieval, "CKPT_META", index / "_build_meta.json")
+    return m3_retrieval, index
+
+
+def test_建索引中斷後接得回來而且結果跟一次跑完一樣(tmp_path, monkeypatch):
+    np = pytest.importorskip("numpy")
+    m3, index = _tiny_corpus(tmp_path, monkeypatch, n=20)
+
+    # 第一趟：編到第 12 筆掛掉
+    monkeypatch.setattr(models, "embed", _fake_embedder(fail_after=12))
+    with pytest.raises(RuntimeError):
+        m3.build_index(batch=4, checkpoint_every=4)
+
+    assert m3.CKPT_VECTORS.exists(), "掛掉了卻沒留下斷點"
+    assert json.loads(m3.CKPT_META.read_text(encoding="utf-8"))["done"] == 12
+    assert not m3.VECTORS.exists(), "還沒編完就寫出了正式索引"
+
+    # 第二趟：接下去編完
+    monkeypatch.setattr(models, "embed", _fake_embedder())
+    assert m3.build_index(batch=4, checkpoint_every=4) == 20
+    resumed = np.load(m3.VECTORS)
+    assert not m3.CKPT_VECTORS.exists(), "建完了斷點沒清掉"
+    assert json.loads(m3.META.read_text(encoding="utf-8"))["count"] == 20
+
+    # 跟一次跑完的結果逐位元比
+    m3.VECTORS.unlink()
+    m3.CASE_IDS.unlink()
+    assert m3.build_index(batch=4, checkpoint_every=4) == 20
+    assert np.array_equal(resumed, np.load(m3.VECTORS)), "接回來的向量跟一次跑完的不一樣"
+
+
+def test_語料換了之後舊斷點作廢(tmp_path, monkeypatch):
+    pytest.importorskip("numpy")
+    m3, _ = _tiny_corpus(tmp_path, monkeypatch, n=20)
+
+    monkeypatch.setattr(models, "embed", _fake_embedder(fail_after=12))
+    with pytest.raises(RuntimeError):
+        m3.build_index(batch=4, checkpoint_every=4)
+    assert json.loads(m3.CKPT_META.read_text(encoding="utf-8"))["done"] == 12
+
+    # 換一份語料（筆數一樣、內文不一樣）—— 指紋要對不上
+    from modules.a_tbd import m1_corpus
+
+    m1_corpus.LOCAL_CORPUS.write_text(
+        "\n".join(
+            json.dumps(
+                {"case_id": f"A-{i}", "text": f"第{i}筆：改寫過的內文", "source": "165"},
+                ensure_ascii=False,
+            )
+            for i in range(20)
+        ),
+        encoding="utf-8",
+    )
+    calls = {"n": 0}
+    inner = _fake_embedder()
+
+    def counting(texts):
+        calls["n"] += len(texts)
+        return inner(texts)
+
+    monkeypatch.setattr(models, "embed", counting)
+    assert m3.build_index(batch=4, checkpoint_every=4) == 20
+    assert calls["n"] == 20, "斷點沒作廢，拿舊向量接了新語料"
+
+
+def test_索引蓋不到語料時退回字元重疊(tmp_path, monkeypatch):
+    np = pytest.importorskip("numpy")
+    m3, _ = _tiny_corpus(tmp_path, monkeypatch, n=20)
+    monkeypatch.setattr(models, "embed", _fake_embedder())
+    m3.build_index(batch=4, checkpoint_every=100)
+    monkeypatch.setattr(m3, "_INDEX_CACHE", None)
+    monkeypatch.setattr(m3, "_WARNED_STALE", False)
+
+    from modules.a_tbd.m1_corpus import Case
+
+    pool = m3.load_local() + [Case(case_id="A-新來的", text="索引裡沒有這筆")]
+    assert m3._vector_scores("我在LINE被騙", pool) is None, "索引沒蓋到的語料該整批退回字元重疊"
+    # 索引蓋得到的時候照常用向量
+    assert m3._vector_scores("我在LINE被騙", m3.load_local()) is not None
+    assert np.load(m3.VECTORS).shape[0] == 20
