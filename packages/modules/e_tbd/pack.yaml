@@ -203,5 +203,5 @@ deliverables:
 
 stats:
   # 2026-09-23 與模組 D 談定界線後重切
-  total_cases: 4276        # Threads × 網購，扣掉超商物流（讓出 4,902 筆給 D）
+  total_cases: 4140        # Threads × 網購，扣掉超商物流（讓出 5,038 筆給 D）
   platform_cases: 12743    # Threads 全部手法（未扣）

@@ -175,7 +175,7 @@ function summary(){
       （${(agree/DATA.length*100).toFixed(1)}%）—— 這不是準確率，
       是「人工標註和現行規則的重合度」，差距大的地方正是要改規則的地方。</p>
     <p style="color:var(--mut);font-size:13px">把下面這段存成
-      <code>eval/gold_rater1_v3.json</code>，交給 Claude 算 kappa：</p>
+      <code>eval/__OUTFILE__</code>，交給 Claude 算 kappa：</p>
     <pre>${esc(out)}</pre>
     <div class=nav><button onclick="i=0;render()">重看</button>
       <button onclick="if(confirm('清空重標？')){marks={};save();i=0;render()}">清空</button></div>
@@ -211,7 +211,11 @@ def main() -> int:
     # 樣本已存在就沿用同一批 case_id —— 重抽會讓新舊兩輪標註無法比較，
     # 而判準改寫後本來就要在「同一批案例」上重標才看得出差異。
     if OUT_SAMPLE.exists():
-        keep = [json.loads(x)["case_id"] for x in OUT_SAMPLE.read_text(encoding="utf-8").splitlines() if x]
+        keep = [
+            json.loads(x)["case_id"]
+            for x in OUT_SAMPLE.read_text(encoding="utf-8").splitlines()
+            if x
+        ]
         by_id = {c["case_id"]: c for c in cases}
         picked = [by_id[i] for i in keep if i in by_id]
         if len(picked) == len(keep):
@@ -251,7 +255,7 @@ def main() -> int:
             rest = [c for v in avail for c in avail[v] if c not in got]
             got += rng.sample(rest, min(PER_STAGE - len(got), len(rest)))
         picked += got
-        detail = "　".join(f"{v} {len([c for c in got if c['_rule_verdict']==v])}" for v in avail)
+        detail = "　".join(f"{v} {len([c for c in got if c['_rule_verdict'] == v])}" for v in avail)
         print(f"  {stage:<12}{len(got):>3} 筆　（{detail}）")
 
     rng.shuffle(picked)  # 打散，避免標註時看出分層順序
@@ -296,6 +300,7 @@ def _write(picked: list[dict]) -> int:
         # 沿用同一個 key 會讀到對不上的舊 marks
         .replace("__KEY__", "gold_s10_v4_rater1")
         .replace("__RATER__", "rater1_v4")
+        .replace("__OUTFILE__", "gold_rater1_v4.json")
     )
     OUT_PAGE.write_text(page, encoding="utf-8")
 

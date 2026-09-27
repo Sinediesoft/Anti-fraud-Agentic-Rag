@@ -1,0 +1,385 @@
+{
+  "gold": "gold_rater1_v4",
+  "n": 60,
+  "baseline": {
+    "accuracy": 0.4666666666666667,
+    "macro_f1": 0.4566289103053809,
+    "kappa": 0.3142857142857143
+  },
+  "slm_only": {
+    "accuracy": 0.45,
+    "macro_f1": 0.44349718381976444,
+    "kappa": 0.2973740241305891
+  },
+  "combined": {
+    "accuracy": 0.5333333333333333,
+    "macro_f1": 0.507076883384933,
+    "kappa": 0.3982808022922636
+  },
+  "relative_gain_accuracy": 0.14285714285714282,
+  "relative_gain_macro_f1": 0.11047914825588648,
+  "fell_back": 0,
+  "model": "qwen2.5:3b",
+  "predictions": {
+    "296962200596123655": {
+      "gold": "credentials",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "214242234428559361": {
+      "gold": "paid",
+      "rule": "repeated",
+      "slm": "credentials",
+      "final": "repeated"
+    },
+    "342573520712110111": {
+      "gold": "repeated",
+      "rule": "repeated",
+      "slm": "repeated",
+      "final": "repeated"
+    },
+    "302658128544010275": {
+      "gold": "credentials",
+      "rule": "credentials",
+      "slm": "drained",
+      "final": "credentials"
+    },
+    "276625326388285483": {
+      "gold": "credentials",
+      "rule": "repeated",
+      "slm": "repeated",
+      "final": "repeated"
+    },
+    "327278776184475656": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "credentials",
+      "final": "none"
+    },
+    "317938608541536266": {
+      "gold": "paid",
+      "rule": "repeated",
+      "slm": "credentials",
+      "final": "paid"
+    },
+    "196569583501447206": {
+      "gold": "credentials",
+      "rule": "none",
+      "slm": "credentials",
+      "final": "none"
+    },
+    "244365556113739779": {
+      "gold": "credentials",
+      "rule": "credentials",
+      "slm": "drained",
+      "final": "credentials"
+    },
+    "276606747643219979": {
+      "gold": "credentials",
+      "rule": "repeated",
+      "slm": "drained",
+      "final": "paid"
+    },
+    "196817864068436012": {
+      "gold": "credentials",
+      "rule": "none",
+      "slm": "credentials",
+      "final": "paid"
+    },
+    "253778100888801303": {
+      "gold": "credentials",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "232335798534410244": {
+      "gold": "paid",
+      "rule": "repeated",
+      "slm": "credentials",
+      "final": "paid"
+    },
+    "206964875845439501": {
+      "gold": "credentials",
+      "rule": "paid",
+      "slm": "drained",
+      "final": "repeated"
+    },
+    "165303355009142795": {
+      "gold": "paid",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "260282876354891799": {
+      "gold": "repeated",
+      "rule": "repeated",
+      "slm": "credentials",
+      "final": "repeated"
+    },
+    "295106622747840528": {
+      "gold": "none",
+      "rule": "paid",
+      "slm": "paid",
+      "final": "paid"
+    },
+    "271911761676865539": {
+      "gold": "credentials",
+      "rule": "repeated",
+      "slm": "credentials",
+      "final": "repeated"
+    },
+    "226742749011906562": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "paid",
+      "final": "paid"
+    },
+    "184145019634978867": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "drained",
+      "final": "paid"
+    },
+    "359256175708999686": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "paid",
+      "final": "paid"
+    },
+    "196454993933373449": {
+      "gold": "credentials",
+      "rule": "credentials",
+      "slm": "credentials",
+      "final": "credentials"
+    },
+    "300924310153859108": {
+      "gold": "repeated",
+      "rule": "paid",
+      "slm": "credentials",
+      "final": "repeated"
+    },
+    "304587019445604353": {
+      "gold": "drained",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "285308319965384714": {
+      "gold": "drained",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "295410324788482051": {
+      "gold": "drained",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "242202563204616210": {
+      "gold": "repeated",
+      "rule": "credentials",
+      "slm": "drained",
+      "final": "credentials"
+    },
+    "196454279937003524": {
+      "gold": "paid",
+      "rule": "credentials",
+      "slm": "credentials",
+      "final": "credentials"
+    },
+    "332762477592842259": {
+      "gold": "repeated",
+      "rule": "credentials",
+      "slm": "drained",
+      "final": "credentials"
+    },
+    "266855500988026884": {
+      "gold": "paid",
+      "rule": "none",
+      "slm": "paid",
+      "final": "paid"
+    },
+    "274022893795414028": {
+      "gold": "paid",
+      "rule": "none",
+      "slm": "credentials",
+      "final": "paid"
+    },
+    "323342532228419606": {
+      "gold": "paid",
+      "rule": "drained",
+      "slm": "repeated",
+      "final": "drained"
+    },
+    "252341585570697288": {
+      "gold": "repeated",
+      "rule": "repeated",
+      "slm": "repeated",
+      "final": "repeated"
+    },
+    "347685113561092101": {
+      "gold": "paid",
+      "rule": "none",
+      "slm": "none",
+      "final": "none"
+    },
+    "267490961339191317": {
+      "gold": "credentials",
+      "rule": "paid",
+      "slm": "none",
+      "final": "none"
+    },
+    "309589391544684547": {
+      "gold": "credentials",
+      "rule": "credentials",
+      "slm": "credentials",
+      "final": "credentials"
+    },
+    "157337822490005516": {
+      "gold": "paid",
+      "rule": "drained",
+      "slm": "paid",
+      "final": "drained"
+    },
+    "287163400524402688": {
+      "gold": "none",
+      "rule": "none",
+      "slm": "none",
+      "final": "none"
+    },
+    "158827226324799540": {
+      "gold": "credentials",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "292180173623660555": {
+      "gold": "repeated",
+      "rule": "credentials",
+      "slm": "credentials",
+      "final": "credentials"
+    },
+    "314909951027843072": {
+      "gold": "paid",
+      "rule": "repeated",
+      "slm": "none",
+      "final": "none"
+    },
+    "298089550574522396": {
+      "gold": "drained",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "264595315951144994": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "paid",
+      "final": "paid"
+    },
+    "355244769611354138": {
+      "gold": "paid",
+      "rule": "none",
+      "slm": "credentials",
+      "final": "paid"
+    },
+    "319749164369973256": {
+      "gold": "credentials",
+      "rule": "paid",
+      "slm": "credentials",
+      "final": "none"
+    },
+    "241459703257763875": {
+      "gold": "drained",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "249021322019999744": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "drained",
+      "final": "paid"
+    },
+    "241394484611387425": {
+      "gold": "paid",
+      "rule": "repeated",
+      "slm": "credentials",
+      "final": "repeated"
+    },
+    "278010643703926799": {
+      "gold": "repeated",
+      "rule": "repeated",
+      "slm": "repeated",
+      "final": "repeated"
+    },
+    "242478932903858200": {
+      "gold": "none",
+      "rule": "none",
+      "slm": "none",
+      "final": "none"
+    },
+    "122908930593525825": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "paid",
+      "final": "paid"
+    },
+    "345831029468041226": {
+      "gold": "credentials",
+      "rule": "credentials",
+      "slm": "credentials",
+      "final": "credentials"
+    },
+    "279545256494501940": {
+      "gold": "repeated",
+      "rule": "credentials",
+      "slm": "credentials",
+      "final": "credentials"
+    },
+    "279824122077253653": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "none",
+      "final": "none"
+    },
+    "276615229612232746": {
+      "gold": "credentials",
+      "rule": "paid",
+      "slm": "credentials",
+      "final": "paid"
+    },
+    "262845390741573660": {
+      "gold": "credentials",
+      "rule": "drained",
+      "slm": "drained",
+      "final": "drained"
+    },
+    "317539545912446998": {
+      "gold": "credentials",
+      "rule": "credentials",
+      "slm": "credentials",
+      "final": "credentials"
+    },
+    "161010298176671780": {
+      "gold": "credentials",
+      "rule": "credentials",
+      "slm": "credentials",
+      "final": "credentials"
+    },
+    "210947906587332623": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "drained",
+      "final": "paid"
+    },
+    "299807353920819212": {
+      "gold": "paid",
+      "rule": "paid",
+      "slm": "paid",
+      "final": "paid"
+    }
+  }
+}

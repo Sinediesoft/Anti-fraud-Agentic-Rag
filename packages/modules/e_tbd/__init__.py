@@ -8,5 +8,6 @@
     m2_vision.py     S11  Threads 貼文、私訊對話、假認證頁的截圖理解（截圖集已備）
     m3_retrieval.py  S12  BM25 ＋ 語意向量（bge-m3）RRF 融合檢索  ✓
     m4_judgement.py  S13  判讀與歷程抽取，接 threads_stages 的 12 階段  ✓
+    slm_stage.py     S13  地端小模型抽三個事實，階段照判準導出  ✓
     m5_agent.py      S14  狀態機與行動劇本
 """
