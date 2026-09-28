@@ -18,6 +18,7 @@
     uv run python packages/modules/e_tbd/eval_stage.py
     uv run python packages/modules/e_tbd/eval_stage.py --fresh
     uv run python packages/modules/e_tbd/eval_stage.py --rounds 3
+    uv run python packages/modules/e_tbd/eval_stage.py --gold packages/modules/e_tbd/eval/gold_rater1_v4.json
 """
 
 from __future__ import annotations
@@ -44,7 +45,9 @@ from packages.shared import models  # noqa: E402
 if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding="utf-8")
 
-GOLD = HERE / "eval" / "gold_rater1_v4.json"
+# 預設用仲裁後那份：兩位標註者一致的 35 筆 ＋ 裁決過的 25 筆。
+# v4 是一個人標的，留著當歷史對照（--gold eval/gold_rater1_v4.json）。
+GOLD = HERE / "eval" / "gold_adjudicated_v5.json"
 SAMPLE = HERE / "data" / "gold_sample.jsonl"
 CACHE = HERE / "data" / "slm_stage_cache.json"
 OUT = HERE / "eval" / "stage_slm_v1.json"
@@ -147,15 +150,19 @@ def _confusion(y_true: list[str], y_pred: list[str]) -> None:
 
 def main() -> int:
     fresh = "--fresh" in sys.argv
+    gold_path = GOLD
+    if "--gold" in sys.argv:
+        gold_path = HERE.parent.parent.parent / sys.argv[sys.argv.index("--gold") + 1]
     rounds = 1
     if "--rounds" in sys.argv:
         rounds = max(1, int(sys.argv[sys.argv.index("--rounds") + 1]))
         fresh = True  # 多輪的重點就是不要重用上一輪的結果
-    if not GOLD.exists() or not SAMPLE.exists():
-        print(f"缺檔案：{GOLD if not GOLD.exists() else SAMPLE}")
+    if not gold_path.exists() or not SAMPLE.exists():
+        print(f"缺檔案：{gold_path if not gold_path.exists() else SAMPLE}")
         return 1
 
-    gold = {x["case_id"]: x["stage"] for x in json.loads(GOLD.read_text("utf-8"))["labels"]}
+    gold = {x["case_id"]: x["stage"] for x in json.loads(gold_path.read_text("utf-8"))["labels"]}
+    print(f"標準答案 {gold_path.name}")
     rows = [json.loads(x) for x in SAMPLE.read_text(encoding="utf-8").splitlines() if x.strip()]
     rows = [r for r in rows if r["case_id"] in gold]
     print(f"標準答案 {len(gold)} 筆，對得上原文的 {len(rows)} 筆\n")
@@ -218,7 +225,7 @@ def main() -> int:
     OUT.write_text(
         json.dumps(
             {
-                "gold": "gold_rater1_v4",
+                "gold": gold_path.stem,
                 "n": len(rows),
                 "baseline": {k: rule[k] for k in ("accuracy", "macro_f1", "kappa")},
                 "slm_only": {k: model[k] for k in ("accuracy", "macro_f1", "kappa")},

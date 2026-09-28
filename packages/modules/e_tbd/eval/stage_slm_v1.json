@@ -1,28 +1,28 @@
 {
-  "gold": "gold_rater1_v4",
+  "gold": "gold_adjudicated_v5",
   "n": 60,
   "baseline": {
-    "accuracy": 0.4666666666666667,
-    "macro_f1": 0.4566289103053809,
-    "kappa": 0.3142857142857143
+    "accuracy": 0.48333333333333334,
+    "macro_f1": 0.46394447657605553,
+    "kappa": 0.3413597733711048
   },
   "slm_only": {
-    "accuracy": 0.4666666666666667,
-    "macro_f1": 0.4662233191644956,
-    "kappa": 0.2987582176771366
+    "accuracy": 0.45,
+    "macro_f1": 0.43949862773392184,
+    "kappa": 0.28338762214983715
   },
   "combined": {
-    "accuracy": 0.5166666666666667,
-    "macro_f1": 0.4929222111677652,
-    "kappa": 0.3658892128279884
+    "accuracy": 0.5666666666666667,
+    "macro_f1": 0.570125313283208,
+    "kappa": 0.44126074498567336
   },
-  "relative_gain_accuracy": 0.10714285714285723,
-  "relative_gain_macro_f1": 0.07948095278967847,
+  "relative_gain_accuracy": 0.17241379310344823,
+  "relative_gain_macro_f1": 0.22886539676207573,
   "fell_back": 0,
   "model": "qwen2.5:3b",
   "predictions": {
     "296962200596123655": {
-      "gold": "credentials",
+      "gold": "drained",
       "rule": "drained",
       "slm": "drained",
       "final": "drained"
@@ -30,7 +30,7 @@
     "214242234428559361": {
       "gold": "paid",
       "rule": "repeated",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "repeated"
     },
     "342573520712110111": {
@@ -40,7 +40,7 @@
       "final": "repeated"
     },
     "302658128544010275": {
-      "gold": "credentials",
+      "gold": "drained",
       "rule": "credentials",
       "slm": "drained",
       "final": "credentials"
@@ -48,20 +48,20 @@
     "276625326388285483": {
       "gold": "credentials",
       "rule": "repeated",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "repeated"
     },
     "327278776184475656": {
-      "gold": "paid",
+      "gold": "none",
       "rule": "paid",
       "slm": "none",
       "final": "none"
     },
     "317938608541536266": {
-      "gold": "paid",
+      "gold": "repeated",
       "rule": "repeated",
-      "slm": "credentials",
-      "final": "paid"
+      "slm": "drained",
+      "final": "repeated"
     },
     "196569583501447206": {
       "gold": "credentials",
@@ -70,21 +70,21 @@
       "final": "none"
     },
     "244365556113739779": {
-      "gold": "credentials",
+      "gold": "drained",
       "rule": "credentials",
       "slm": "drained",
       "final": "credentials"
     },
     "276606747643219979": {
-      "gold": "credentials",
+      "gold": "drained",
       "rule": "repeated",
       "slm": "drained",
       "final": "paid"
     },
     "196817864068436012": {
-      "gold": "credentials",
+      "gold": "paid",
       "rule": "none",
-      "slm": "credentials",
+      "slm": "paid",
       "final": "paid"
     },
     "253778100888801303": {
@@ -108,7 +108,7 @@
     "165303355009142795": {
       "gold": "paid",
       "rule": "drained",
-      "slm": "paid",
+      "slm": "drained",
       "final": "drained"
     },
     "260282876354891799": {
@@ -120,14 +120,14 @@
     "295106622747840528": {
       "gold": "none",
       "rule": "paid",
-      "slm": "paid",
-      "final": "paid"
+      "slm": "none",
+      "final": "none"
     },
     "271911761676865539": {
       "gold": "credentials",
       "rule": "repeated",
-      "slm": "credentials",
-      "final": "repeated"
+      "slm": "paid",
+      "final": "paid"
     },
     "226742749011906562": {
       "gold": "paid",
@@ -138,25 +138,25 @@
     "184145019634978867": {
       "gold": "paid",
       "rule": "paid",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "paid"
     },
     "359256175708999686": {
       "gold": "paid",
       "rule": "paid",
-      "slm": "paid",
+      "slm": "drained",
       "final": "paid"
     },
     "196454993933373449": {
       "gold": "credentials",
       "rule": "credentials",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "credentials"
     },
     "300924310153859108": {
       "gold": "repeated",
       "rule": "paid",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "repeated"
     },
     "304587019445604353": {
@@ -178,9 +178,9 @@
       "final": "drained"
     },
     "242202563204616210": {
-      "gold": "repeated",
+      "gold": "credentials",
       "rule": "credentials",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "credentials"
     },
     "196454279937003524": {
@@ -190,9 +190,9 @@
       "final": "credentials"
     },
     "332762477592842259": {
-      "gold": "repeated",
+      "gold": "drained",
       "rule": "credentials",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "credentials"
     },
     "266855500988026884": {
@@ -202,13 +202,13 @@
       "final": "paid"
     },
     "274022893795414028": {
-      "gold": "paid",
+      "gold": "drained",
       "rule": "none",
       "slm": "drained",
       "final": "paid"
     },
     "323342532228419606": {
-      "gold": "paid",
+      "gold": "drained",
       "rule": "drained",
       "slm": "repeated",
       "final": "drained"
@@ -226,15 +226,15 @@
       "final": "none"
     },
     "267490961339191317": {
-      "gold": "credentials",
+      "gold": "drained",
       "rule": "paid",
-      "slm": "paid",
-      "final": "paid"
+      "slm": "none",
+      "final": "none"
     },
     "309589391544684547": {
-      "gold": "credentials",
+      "gold": "drained",
       "rule": "credentials",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "credentials"
     },
     "157337822490005516": {
@@ -250,19 +250,19 @@
       "final": "none"
     },
     "158827226324799540": {
-      "gold": "credentials",
+      "gold": "drained",
       "rule": "drained",
       "slm": "drained",
       "final": "drained"
     },
     "292180173623660555": {
-      "gold": "repeated",
+      "gold": "drained",
       "rule": "credentials",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "credentials"
     },
     "314909951027843072": {
-      "gold": "paid",
+      "gold": "none",
       "rule": "repeated",
       "slm": "paid",
       "final": "paid"
@@ -276,19 +276,19 @@
     "264595315951144994": {
       "gold": "paid",
       "rule": "paid",
-      "slm": "paid",
+      "slm": "drained",
       "final": "paid"
     },
     "355244769611354138": {
       "gold": "paid",
       "rule": "none",
-      "slm": "credentials",
-      "final": "repeated"
+      "slm": "drained",
+      "final": "paid"
     },
     "319749164369973256": {
       "gold": "credentials",
       "rule": "paid",
-      "slm": "credentials",
+      "slm": "none",
       "final": "none"
     },
     "241459703257763875": {
@@ -300,13 +300,13 @@
     "249021322019999744": {
       "gold": "paid",
       "rule": "paid",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "paid"
     },
     "241394484611387425": {
       "gold": "paid",
       "rule": "repeated",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "paid"
     },
     "278010643703926799": {
@@ -324,13 +324,13 @@
     "122908930593525825": {
       "gold": "paid",
       "rule": "paid",
-      "slm": "paid",
+      "slm": "drained",
       "final": "paid"
     },
     "345831029468041226": {
       "gold": "credentials",
       "rule": "credentials",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "credentials"
     },
     "279545256494501940": {
@@ -348,7 +348,7 @@
     "276615229612232746": {
       "gold": "credentials",
       "rule": "paid",
-      "slm": "credentials",
+      "slm": "paid",
       "final": "paid"
     },
     "262845390741573660": {
@@ -372,13 +372,13 @@
     "210947906587332623": {
       "gold": "paid",
       "rule": "paid",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "paid"
     },
     "299807353920819212": {
       "gold": "paid",
       "rule": "paid",
-      "slm": "credentials",
+      "slm": "drained",
       "final": "paid"
     }
   }
