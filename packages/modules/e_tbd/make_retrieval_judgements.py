@@ -10,8 +10,14 @@
 所以只要判定每題 Top-5 這幾筆相不相關，就能算出沒有低估的 Recall@5，
 不需要把 9,167 筆全部標完。這是 IR 的標準做法（pooling + relevance judgement）。
 
-**判定池**＝現行檢索的 Top-5 ∪ 原本的 gold。把 gold 也放進去是必要的：
-不放的話，原本算命中的題目會因為 gold 沒被判定過而變成失敗。
+**判定池**＝BM25 Top-5 ∪ 語意向量 Top-5 ∪ RRF 融合 Top-5 ∪ 原本的 gold。
+
+三路都要進池子，不能只放融合後的那五筆 —— 只判融合的結果，等於只有融合這條路
+有機會被判為相關，另外兩路撈到的好案例永遠沒被判定過、一律算成失敗。
+那樣比較三種檢索方法會系統性地偏向融合。這是 pooling 的基本要求：
+**池子要涵蓋所有要比較的系統**。
+
+gold 也一定要進池子：不放的話，原本算命中的題目會因為 gold 沒被判定過而變成失敗。
 
 **頁面刻意不顯示哪一筆是 gold、也不顯示名次**——
 S10 那次就是因為標註頁帶入上一輪答案，kappa 0.906 分不出「判準修好」和「照抄」。
@@ -174,14 +180,24 @@ def main() -> int:
 
     data = []
     total = 0
+    from_path = {"bm25": 0, "dense": 0, "fused": 0, "gold": 0}
     for qi, q in enumerate(questions):
-        hits = M.search(q["text"], top_k=TOP_K, cases=pool)
-        ids = [h.case_id for h in hits]
-        # gold 一定要進判定池：不放的話，原本算命中的題目會因為 gold 沒被判定過
-        # 而被當成失敗，等於用判定把分數往下壓
-        for gold in q.get("gold_case_ids", []):
-            if gold not in ids and gold in by_id:
-                ids.append(gold)
+        # 三路各取 Top-5。用的是 m3_retrieval 內部那兩個函式 —— 同一個模組內，
+        # 而且要的就是「融合之前」的排名，走 search() 拿不到。
+        ids: list[str] = []
+        bm25 = M._bm25(pool).scores(q["text"])
+        dense = M._vector_scores(q["text"], pool)
+        paths = {
+            "bm25": sorted(bm25, key=lambda cid: -bm25[cid])[:TOP_K] if bm25 else [],
+            "dense": sorted(dense, key=lambda cid: -dense[cid])[:TOP_K] if dense else [],
+            "fused": [h.case_id for h in M.search(q["text"], top_k=TOP_K, cases=pool)],
+            "gold": [g for g in q.get("gold_case_ids", []) if g in by_id],
+        }
+        for name, got in paths.items():
+            for cid in got:
+                if cid not in ids:
+                    ids.append(cid)
+                    from_path[name] += 1
 
         cases = []
         for cid in ids:
@@ -206,6 +222,7 @@ def main() -> int:
     OUT.write_text(page, encoding="utf-8")
     rel = OUT.relative_to(HERE.parent.parent.parent)
     print(f"判定頁 {rel}（{len(data)} 題、共 {total} 筆要判）")
+    print("池子首次由哪一路帶進來：" + "　".join(f"{k} {v}" for k, v in from_path.items()))
     print("判完按「產生結果」，把 JSON 存成 eval/retrieval_judgements.json")
     return 0
 
