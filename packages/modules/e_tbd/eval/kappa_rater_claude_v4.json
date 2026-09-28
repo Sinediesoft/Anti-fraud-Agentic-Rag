@@ -1,0 +1,134 @@
+{
+ "n": 60,
+ "agree": 35,
+ "kappa": 0.4497,
+ "threshold": 0.7,
+ "passed": false,
+ "disagreements": [
+  {
+   "case_id": "158827226324799540",
+   "rater1": "credentials",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "161010298176671780",
+   "rater1": "credentials",
+   "rater2": "repeated"
+  },
+  {
+   "case_id": "184145019634978867",
+   "rater1": "paid",
+   "rater2": "credentials"
+  },
+  {
+   "case_id": "196817864068436012",
+   "rater1": "credentials",
+   "rater2": "paid"
+  },
+  {
+   "case_id": "210947906587332623",
+   "rater1": "paid",
+   "rater2": "credentials"
+  },
+  {
+   "case_id": "214242234428559361",
+   "rater1": "paid",
+   "rater2": "credentials"
+  },
+  {
+   "case_id": "241394484611387425",
+   "rater1": "paid",
+   "rater2": "credentials"
+  },
+  {
+   "case_id": "242202563204616210",
+   "rater1": "repeated",
+   "rater2": "credentials"
+  },
+  {
+   "case_id": "244365556113739779",
+   "rater1": "credentials",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "267490961339191317",
+   "rater1": "credentials",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "274022893795414028",
+   "rater1": "paid",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "276606747643219979",
+   "rater1": "credentials",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "279545256494501940",
+   "rater1": "repeated",
+   "rater2": "credentials"
+  },
+  {
+   "case_id": "279824122077253653",
+   "rater1": "paid",
+   "rater2": "credentials"
+  },
+  {
+   "case_id": "292180173623660555",
+   "rater1": "repeated",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "295106622747840528",
+   "rater1": "none",
+   "rater2": "paid"
+  },
+  {
+   "case_id": "296962200596123655",
+   "rater1": "credentials",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "302658128544010275",
+   "rater1": "credentials",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "309589391544684547",
+   "rater1": "credentials",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "314909951027843072",
+   "rater1": "paid",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "317938608541536266",
+   "rater1": "paid",
+   "rater2": "repeated"
+  },
+  {
+   "case_id": "323342532228419606",
+   "rater1": "paid",
+   "rater2": "credentials"
+  },
+  {
+   "case_id": "327278776184475656",
+   "rater1": "paid",
+   "rater2": "none"
+  },
+  {
+   "case_id": "332762477592842259",
+   "rater1": "repeated",
+   "rater2": "drained"
+  },
+  {
+   "case_id": "355244769611354138",
+   "rater1": "paid",
+   "rater2": "credentials"
+  }
+ ]
+}

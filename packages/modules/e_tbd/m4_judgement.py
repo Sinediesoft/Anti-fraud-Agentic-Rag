@@ -5,7 +5,8 @@
   第二層 重試兩次
   第三層 改用規則硬抽，並標記「信心低」
 
-S3 還沒鎖定模型，所以現在每次都會走到第三層 —— 而那正是退路要能被證明會啟動的意思。
+S3 已經鎖定 qwen2.5:3b，第一層走 `slm_stage`（模型只抽三個事實，階段由判準導出，
+理由見那支的 docstring）。模型連不上或吐不合格式時，這裡重試兩次後落到規則層。
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 from contracts import CaseProfile, Confidence
 from shared import deid, models
 
-from . import threads_stages
+from . import slm_stage, threads_stages
 
 
 @dataclass
@@ -125,6 +126,29 @@ def extract_profile(text: str, *, platform_terms: list[str], stage_id: str) -> C
     )
 
 
+# 規則層自己判得比模型好的兩個階段。
+#
+# 這兩階要的是**決定性訊號**（盜刷、盜轉、驗證碼、實名認證、遠端操作），
+# 規則的詞表是逐筆掃 12,743 筆 Threads 案例建出來的，drained 的 recall 是 1.00。
+# 模型在這兩階會把「對方要求」也算成「已經發生」——gold 60 筆上它判了 14 次
+# drained 只中 5 次（precision 0.26，規則是 0.42）。
+#
+# 模型贏的是**數次數**：「匯了第一筆之後又匯兩次」這種要讀懂才數得出來，
+# 規則靠付款動詞數，沒有動詞就整批落到「尚未付款」。gold 裡它數對 26/35。
+#
+# 所以分工是：決定性訊號歸規則，數次數歸模型。不是誰比較準，是兩者強項不同。
+RULE_OWNED = ("drained", "credentials")
+
+
+def combine_stage(rule_stage: str, call: slm_stage.StageCall | None) -> str:
+    """把規則層與模型的判讀合成最後的階段。模型沒答案就全用規則的。"""
+    if call is None:
+        return rule_stage
+    if rule_stage in RULE_OWNED:
+        return rule_stage
+    return slm_stage.derive(stolen=False, handed=False, paid_times=call.paid_times)
+
+
 def judge(
     text: str,
     *,
@@ -134,28 +158,59 @@ def judge(
     stages: list[dict],
     route_min: float,
 ) -> Judgement:
-    """整個 M4 的入口。先試模型，失敗就落到規則。"""
+    """整個 M4 的入口。說明書 S13 第 4 點的三層退路都在這裡。
+
+    第一層  grammar="json" 把輸出約束成合法 JSON，欄位值再由 slm_stage.parse 驗
+    第二層  不合格就重試，最多兩次
+    第三層  還是不行就全部退回規則，並把 confidence 標成 LOW
+
+    模型未鎖定（ModelNotSelectedError）不重試 —— 那是設定問題，再叫一次結果一樣。
+    """
     notes: list[str] = []
     confidence = Confidence.MEDIUM
-
-    # 第一層 + 第二層：讓地端小模型照格式吐。模型未鎖定時直接落到第三層。
-    for attempt in range(2):
-        try:
-            # TODO(S13)：把 prompt、few-shot 12 則、grammar 約束寫在這裡
-            models.call_slm("", grammar=None)
-            break
-        except models.ModelNotSelectedError as exc:
-            if attempt == 1:
-                notes.append(f"退到規則抽取：{exc}")
-                confidence = Confidence.LOW
-        except Exception as exc:  # 模型吐出來的東西不合格式
-            if attempt == 1:
-                notes.append(f"模型輸出不合格式，退到規則抽取：{exc}")
-                confidence = Confidence.LOW
+    call: slm_stage.StageCall | None = None
 
     score = keyword_score(text, positive, negative)
-    stage_id = detect_stage(text, stages)
+    rule_stage = detect_stage(text, stages)
+
+    # 規則已經抓到決定性訊號時不呼叫模型 —— combine_stage 本來就會丟掉它的答案，
+    # 叫了也是白叫。實測一次呼叫 640ms 有 97% 花在生成，而 gold 那 60 筆裡
+    # 有 40% 落在這條捷徑上。
+    skip = rule_stage in RULE_OWNED
+    if skip:
+        notes.append(f"規則層已判定「{rule_stage}」，這一階不看模型")
+
+    for attempt in range(0 if skip else 2):
+        try:
+            call = slm_stage.classify(text)
+        except models.ModelNotSelectedError as exc:
+            notes.append(f"退到規則抽取：{exc}")
+            confidence = Confidence.LOW
+            break
+        except Exception as exc:  # noqa: BLE001 —— 連不上、逾時都算這次失敗
+            if attempt == 1:
+                notes.append(f"模型呼叫失敗，退到規則抽取：{exc}")
+                confidence = Confidence.LOW
+            continue
+        if call:
+            break
+        if attempt == 1:
+            notes.append("模型輸出不合格式，退到規則抽取")
+            confidence = Confidence.LOW
+
+    stage_id = combine_stage(rule_stage, call)
     profile = extract_profile(text, platform_terms=platform_terms, stage_id=stage_id)
+
+    if call:
+        # 0.6 不是「六成正確」，是「比純規則的 0.4 高一級」——
+        # 實測值請看 eval/stage_slm_v1.json，那才是準確率。
+        profile.field_confidence["scam_stage"] = 0.6
+        if call.reason:
+            notes.append(f"模型讀到：{call.reason}")
+        if stage_id != rule_stage:
+            notes.append(
+                f"規則判「{rule_stage or '未判定'}」，依模型數到的付款次數改判「{stage_id}」"
+            )
 
     return Judgement(
         is_mine=score >= route_min,
