@@ -1,0 +1,51 @@
+# 報案資料範例。所有資料都是假的——複製一份到 repo 以外的地方，換成你自己的。
+#
+# 真實資料不要存在 repo 裡：這份檔案與產生的草稿都含有真名與完整帳號。
+#
+# 時間可以寫 2026-09-01 或 2026-09-01 14:30，不用加引號。
+
+reporter:
+  name: 王大明
+  phone: 0900-000-000
+
+# 經過寫成一行就好。用 > 折行的話，YAML 會在換行處插入空格，中文句子中間會多出空白
+summary: 九月初在臉書看到投資廣告，加了對方 LINE 之後被拉進「股票研究群」，群組裡的老師叫我到指定平台開戶儲值。前兩次有看到獲利，第三次想出金時，客服說要先繳保證金才能出金，繳了之後還是領不出來。
+
+events:
+  - time: 2026-09-01
+    description: 在臉書看到投資廣告，加入對方 LINE
+  - time: 2026-09-03
+    description: 被拉進 LINE 群組，依指示下載投資平台 APP
+  - time: 2026-09-12
+    description: 申請出金被拒，客服要求先繳保證金
+
+transfers:
+  - time: 2026-09-03 20:15
+    amount: 30000
+    method: 轉帳
+    payee: 000-0000000000001
+    bank: 範例銀行
+    note: 第一次儲值
+  - time: 2026-09-08 13:40
+    amount: 45500
+    method: 網路銀行
+    payee: 000-0000000000002
+    bank: 範例銀行
+  - time: 2026-09-12 18:05
+    amount: 20000
+    method: 超商代碼
+    note: 客服說是出金保證金（範例故意沒填代碼，示範缺項提醒）
+
+counterparties:
+  - kind: LINE
+    value: "@000example"
+  - kind: 網址
+    value: https://example.invalid/app
+
+evidence:
+  - LINE 對話截圖（群組與私訊）
+  - 網路銀行交易明細
+  - 超商繳費收據
+
+actions_taken:
+  - 已撥打 165 諮詢
