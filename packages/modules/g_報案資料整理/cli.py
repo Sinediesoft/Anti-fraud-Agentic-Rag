@@ -1,4 +1,4 @@
-"""進入點：python -m packages.modules.g_報案書_擬稿.cli <facts.yaml> --out <報案資料整理.md>
+"""進入點：python -m packages.modules.g_報案資料整理.cli <facts.yaml> --out <報案資料整理.md>
 
 讀寫一律明確指定 utf-8：繁中 Windows 的 open() 預設是 cp950，使用者的
 敘述裡只要有一個 emoji 就會炸。
@@ -20,7 +20,7 @@ from .schemas import ReportFacts
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
-        prog="python -m packages.modules.g_報案書_擬稿.cli",
+        prog="python -m packages.modules.g_報案資料整理.cli",
         description="整理報案前要準備的資料，報案時帶去派出所。",
     )
     ap.add_argument("facts", type=Path, help="報案資料 YAML，格式見 examples/facts.example.yaml")

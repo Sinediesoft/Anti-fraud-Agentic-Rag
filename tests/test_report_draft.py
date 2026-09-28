@@ -1,6 +1,6 @@
-"""報案資料整理（g_報案書_擬稿）的測試。
+"""報案資料整理（g_報案資料整理）的測試。
 
-這個工具跟其他模組方向相反：草稿要帶著真名、精確金額、完整帳號，
+這個工具跟其他模組方向相反：產出要帶著真名、精確金額、完整帳號，
 所以不過 shared.deid，也不呼叫任何模型——全程在本機。
 """
 
@@ -10,12 +10,12 @@ from pathlib import Path
 
 from contracts import RiskLevel, Verdict
 
-from packages.modules.g_報案書_擬稿.cli import main
-from packages.modules.g_報案書_擬稿.draft import missing_items, render
-from packages.modules.g_報案書_擬稿.schemas import ReportFacts
+from packages.modules.g_報案資料整理.cli import main
+from packages.modules.g_報案資料整理.draft import missing_items, render
+from packages.modules.g_報案資料整理.schemas import ReportFacts
 
 EXAMPLE = Path(__file__).resolve().parent.parent / (
-    "packages/modules/g_報案書_擬稿/examples/facts.example.yaml"
+    "packages/modules/g_報案資料整理/examples/facts.example.yaml"
 )
 
 

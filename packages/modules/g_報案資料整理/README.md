@@ -45,7 +45,7 @@
 ## 用法
 
 ```bash
-python -m packages.modules.g_報案書_擬稿.cli packages/modules/g_報案書_擬稿/examples/facts.example.yaml --out ../報案資料整理.md
+python -m packages.modules.g_報案資料整理.cli packages/modules/g_報案資料整理/examples/facts.example.yaml --out ../報案資料整理.md
 ```
 
 - 格式見 [`examples/facts.example.yaml`](examples/facts.example.yaml)（全是假資料）
